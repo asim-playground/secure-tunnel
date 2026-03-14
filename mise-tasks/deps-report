@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Report dependency freshness for enabled components"
+set -euo pipefail
+
+mise run rust:outdated
+

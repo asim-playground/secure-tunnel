@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+#MISE description="Clean generated artifacts"
+set -euo pipefail
+
+mise run rust:clean
+
+
+mise run python:clean
+
+
+mise run go:clean
+mise run go-wasm:clean
+
+

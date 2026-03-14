@@ -1,0 +1,25 @@
+[package]
+name = "secure-tunnel-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+description = "Core library for Secure Tunnel"
+homepage = "https://github.com/asim-playground/secure-tunnel"
+repository = "https://github.com/asim-playground/secure-tunnel"
+documentation = "https://docs.rs/secure-tunnel-core"
+readme = "../../README.md"
+keywords = ["secure-tunnel", "core"]
+categories = ["development-tools"]
+
+[dependencies]
+thiserror = "2.0"
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[lints]
+workspace = true

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+#MISE description="Set up local developer tooling"
+set -euo pipefail
+
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    mise run mac-setup
+fi
+
+
+mise run python:setup
+
+
+
+
+
+mise run go-wasm:setup
+

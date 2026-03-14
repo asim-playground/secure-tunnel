@@ -1,0 +1,35 @@
+[workspace]
+members = [
+    "crates/cli",
+    "crates/core",
+    "crates/go",
+    "crates/go-wasm",
+    "crates/python",
+]
+
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MPL-2.0"
+rust-version = "1.94.0"
+authors = ["Asim Ihsan"]
+
+[profile.release]
+lto = true
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+# Lint groups have lower priority than individual lints
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+# Individual lints with higher priority
+unwrap_used = "deny"
+expect_used = "deny"
+dbg_macro = "deny"
+todo = "deny"

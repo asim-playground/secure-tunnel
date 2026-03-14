@@ -1,0 +1,13 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: 1b7d143
+_src_path: /Users/asimi/workplace/copier_rust_template
+author_name: Asim Ihsan
+github_username: asim-playground
+include_go: true
+include_python: true
+include_wasm: false
+include_web: false
+include_web_leptos: false
+project_name: Secure Tunnel
+project_slug: secure-tunnel
+project_slug_underscore: secure_tunnel

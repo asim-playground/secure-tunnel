@@ -1,0 +1,113 @@
+// Copyright 2025 Asim Ihsan
+//
+// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+// If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
+//
+// SPDX-License-Identifier: MPL-2.0
+
+//! Core library for Secure Tunnel.
+//!
+//! This library provides the core functionality for parsing and evaluating
+//! arithmetic expressions of the form `1+2+3`.
+
+use thiserror::Error;
+
+/// Our custom error type for parsing failures.
+#[derive(Error, Debug, Clone)]
+pub enum ParseError {
+    /// A generic parsing error with a descriptive message.
+    #[error("Parse error: {0}")]
+    Generic(String),
+}
+
+/// A simple arithmetic expression parser that accepts expressions like "1+2+3"
+/// and computes their sum.
+///
+/// # Errors
+///
+/// Returns a `ParseError` if:
+/// - The input contains non-numeric characters (except '+')
+/// - The input has invalid syntax (e.g., "1+" or "+2")
+/// - The input is empty or contains only whitespace
+///
+/// # Examples
+///
+/// ```
+/// use secure_tunnel_core::parse;
+///
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// assert_eq!(parse("1+2+3")?, "6");
+/// assert_eq!(parse("10+20+30")?, "60");
+/// # Ok(())
+/// # }
+/// ```
+pub fn parse(input: &str) -> Result<String, ParseError> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Err(ParseError::Generic("input is empty".to_owned()));
+    }
+
+    let mut total = 0_i64;
+    for part in trimmed.split('+') {
+        let number = part.trim();
+        if number.is_empty() {
+            return Err(ParseError::Generic("expected a number between '+' operators".to_owned()));
+        }
+
+        let value = number.parse::<i64>().map_err(|error| {
+            ParseError::Generic(format!("invalid integer `{number}`: {error}"))
+        })?;
+        total = total.checked_add(value).ok_or_else(|| {
+            ParseError::Generic(format!(
+                "integer overflow while summing expression near `{number}`"
+            ))
+        })?;
+    }
+
+    Ok(total.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse() {
+        match parse("1+2+3") {
+            Ok(result) => assert_eq!(result, "6"),
+            Err(e) => panic!("Expected successful parse of '1+2+3', got error: {e}"),
+        }
+        
+        match parse("10+20+30") {
+            Ok(result) => assert_eq!(result, "60"),
+            Err(e) => panic!("Expected successful parse of '10+20+30', got error: {e}"),
+        }
+        
+        match parse("100+200+300") {
+            Ok(result) => assert_eq!(result, "600"),
+            Err(e) => panic!("Expected successful parse of '100+200+300', got error: {e}"),
+        }
+    }
+
+    #[test]
+    fn test_parse_invalid() {
+        let res = parse("1+");
+        if let Err(e) = res {
+            assert!(e.to_string().contains("expected a number"));
+        } else {
+            println!("Expected an error, but got a result");
+            println!("Result: {res:?}");
+            panic!("Expected an error, but got a result");
+        }
+    }
+
+    #[test]
+    fn test_parse_overflow() {
+        let res = parse("9223372036854775807+1");
+        if let Err(e) = res {
+            assert!(e.to_string().contains("integer overflow"));
+        } else {
+            panic!("Expected overflow error, but got a result: {res:?}");
+        }
+    }
+}

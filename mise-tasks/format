@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+#MISE description="Format repository sources"
+set -euo pipefail
+
+mise run rust:format
+
+
+
+mise run python:format
+

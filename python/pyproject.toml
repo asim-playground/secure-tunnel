@@ -1,0 +1,91 @@
+[build-system]
+requires = ["maturin>=1.4,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "secure-tunnel"
+version = "0.1.0"
+description = "Python bindings for Secure Tunnel"
+requires-python = ">=3.14"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Topic :: Software Development :: Libraries :: Python Modules"
+]
+
+[tool.maturin]
+manifest-path = "../crates/python/Cargo.toml"
+python-source = "src"
+module-name = "secure_tunnel.secure_tunnel"
+features = ["pyo3/extension-module"]
+include = ["src/secure_tunnel/*.pyi", "src/secure_tunnel/py.typed"]
+
+[dependency-groups]
+dev = [
+    "basedpyright>=1.28.4",
+    "coverage>=7.6.1",
+    "maturin>=1.8.2",
+    "pytest-cov>=5.0.0",
+    "pytest>=8.3.4",
+    "ruff-lsp>=0.0.60",
+    "ruff>=0.9.2",
+]
+
+[tool.pytest.ini_options]
+addopts = "-v"
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
+
+[tool.ruff]
+target-version = "py311"
+exclude = [".git", ".venv", "__pycache__", "build", "dist"]
+src = ["src"]
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # bugbear
+    "N",  # naming
+    "D",  # docstrings
+    "UP",  # pyupgrade
+]
+ignore = [
+    "D100",  # Missing docstring in public module
+    "D101",  # Missing docstring in public class
+    "D102",  # Missing docstring in public method
+    "D103",  # Missing docstring in public function
+    "D104",  # Missing docstring in public package
+    "D105",  # Missing docstring in magic method
+    "D107",  # Missing docstring in __init__
+    "D203",  # Disable blank line requirement before class docstring
+    "D213"   # Disable multi-line summary on the second line
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.pyright]
+include = ["src/secure_tunnel"]
+typeCheckingMode = "basic"
+strictParameterNoneValue = true
+reportMissingTypeStubs = true
+reportUnknownMemberType = true
+pythonVersion = "3.14"
+extraPaths = ["src"]
+venv = ".venv"
+
+[tool.coverage.run]
+source = ["test_e2e"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
