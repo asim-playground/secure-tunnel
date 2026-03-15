@@ -69,6 +69,8 @@ pub trait SecureReadyEvaluator: Send + Sync {
     /// error when the attempt must stop.
     fn reach_secure_ready(
         &self,
+        descriptor: &ServiceDescriptor,
+        now_unix_seconds: u64,
         transport: Box<dyn FramedDuplex>,
     ) -> BoxFuture<'_, ApiResult<SecureReadyTransport>>;
 }
@@ -166,6 +168,10 @@ impl TransportSelector {
         );
 
         for (index, candidate) in plan.iter().enumerate() {
+            let secure_ready_context = SecureReadyContext {
+                descriptor,
+                now_unix_seconds,
+            };
             let transport = match self
                 .connect_candidate(candidate, connectors, &mut state.attempts)
                 .await?
@@ -178,7 +184,13 @@ impl TransportSelector {
             };
 
             match self
-                .evaluate_candidate(candidate, transport, secure_ready, &mut state.attempts)
+                .evaluate_candidate(
+                    secure_ready_context,
+                    candidate,
+                    transport,
+                    secure_ready,
+                    &mut state.attempts,
+                )
                 .await?
             {
                 AttemptState::Continue(reason) => {
@@ -225,6 +237,7 @@ impl TransportSelector {
 
     async fn evaluate_candidate(
         self,
+        context: SecureReadyContext<'_>,
         candidate: &TransportCandidate,
         transport: Box<dyn FramedDuplex>,
         secure_ready: &dyn SecureReadyEvaluator,
@@ -233,7 +246,9 @@ impl TransportSelector {
         classify_attempt(
             candidate,
             attempts,
-            secure_ready.reach_secure_ready(transport).await,
+            secure_ready
+                .reach_secure_ready(context.descriptor, context.now_unix_seconds, transport)
+                .await,
             SecureReadyTransport::carrier,
         )
     }
@@ -242,6 +257,12 @@ impl TransportSelector {
 enum AttemptState<T> {
     Continue(crate::FallbackReason),
     Ready(T),
+}
+
+#[derive(Clone, Copy)]
+struct SecureReadyContext<'a> {
+    descriptor: &'a ServiceDescriptor,
+    now_unix_seconds: u64,
 }
 
 struct SelectionState {
@@ -464,8 +485,8 @@ mod tests {
     };
     use crate::{
         ApiError, ApiResult, CarrierKind, CloseDirective, FallbackReason, FramedDuplex,
-        SecureReadyArtifacts, SecureReadyTransport, TransportCacheSnapshot, TransportTarget,
-        example_service_descriptor,
+        SecureReadyArtifacts, SecureReadyTransport, ServiceDescriptor, TransportCacheSnapshot,
+        TransportTarget, example_service_descriptor,
     };
 
     #[test]
@@ -828,6 +849,8 @@ mod tests {
     impl SecureReadyEvaluator for MockSecureReadyEvaluator {
         fn reach_secure_ready(
             &self,
+            _descriptor: &ServiceDescriptor,
+            _now_unix_seconds: u64,
             transport: Box<dyn FramedDuplex>,
         ) -> crate::BoxFuture<'_, ApiResult<SecureReadyTransport>> {
             let result = self.outcomes.lock().unwrap().pop_front().unwrap_or(Ok(()));

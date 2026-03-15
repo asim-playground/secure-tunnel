@@ -7,6 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::codec::put_len_prefixed_str;
 use crate::constants::{NOISE_SUITE_V1, PROTOCOL_ID_V1, QUIC_ALPN_V1, WSS_SUBPROTOCOL_V1};
 use crate::error::{ApiError, ApiResult};
 use crate::transport::{
@@ -43,6 +44,22 @@ pub struct ServiceDescriptor {
 }
 
 impl ServiceDescriptor {
+    /// Builds the canonical Noise prologue for this descriptor.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when any bound field exceeds the v1 encoding limit.
+    pub fn noise_prologue(&self) -> ApiResult<Vec<u8>> {
+        let mut prologue = Vec::with_capacity(128);
+
+        put_prologue_field(&mut prologue, &self.protocol_id)?;
+        put_prologue_field(&mut prologue, &self.environment_id)?;
+        put_prologue_field(&mut prologue, &self.service_id)?;
+        put_prologue_field(&mut prologue, &self.service_authority)?;
+
+        Ok(prologue)
+    }
+
     /// Returns the ordered connect plan for the current coarse network posture.
     ///
     /// This is intentionally limited to ordering and reporting. The selector
@@ -134,6 +151,11 @@ impl ServiceDescriptor {
 
         Ok(())
     }
+}
+
+fn put_prologue_field(buffer: &mut Vec<u8>, value: &str) -> ApiResult<()> {
+    put_len_prefixed_str(buffer, value)
+        .map_err(|_| ApiError::InvalidServiceDescriptor("prologue field exceeds u16 length"))
 }
 
 /// One root key that authorizes descriptors and server Noise keys.
@@ -360,5 +382,21 @@ mod tests {
             error,
             ApiError::InvalidServiceDescriptor("v1 requires QUIC as the preferred carrier")
         );
+    }
+
+    #[test]
+    fn noise_prologue_uses_canonical_field_order_and_length_prefixes() {
+        let descriptor = example_service_descriptor();
+
+        let prologue = descriptor.noise_prologue().unwrap();
+        let expected = [
+            0x00, 0x10, b's', b'e', b'c', b'u', b'r', b'e', b'-', b't', b'u', b'n', b'n', b'e',
+            b'l', b'-', b'v', b'1', 0x00, 0x04, b'p', b'r', b'o', b'd', 0x00, 0x11, b's', b'e',
+            b'c', b'u', b'r', b'e', b'-', b't', b'u', b'n', b'n', b'e', b'l', b'-', b'a', b'p',
+            b'i', 0x00, 0x0f, b'a', b'p', b'i', b'.', b'e', b'x', b'a', b'm', b'p', b'l', b'e',
+            b'.', b'c', b'o', b'm',
+        ];
+
+        assert_eq!(prologue, expected);
     }
 }

@@ -15,7 +15,11 @@ keywords = ["secure-tunnel", "core"]
 categories = ["development-tools"]
 
 [dependencies]
+base64 = "0.22"
+bytes = "1"
+ed25519-dalek = "2"
 serde = { version = "1.0", features = ["derive"] }
+snow = { version = "0.10", default-features = false, features = ["default-resolver", "default-resolver-crypto"] }
 thiserror = "2.0"
 
 [dev-dependencies]

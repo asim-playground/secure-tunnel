@@ -137,10 +137,11 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
     `task-00000001` now provides the starter crate set for the first prototype
     slices, `task-00000009` remains only partially addressed, and crate/API
     architecture work is still open.
-  - `Phase 2` has started with `task-00000010` complete: the shared selector
-    and framed-duplex proving slice is in place, while `task-00000011` and
-    `task-00000012` still depend on the remaining backlog closure around
-    transport policy, protocol/binding docs, and deployment guidance.
+  - `Phase 2` now has `task-00000010` and `task-00000011` complete: the shared
+    selector, framed-duplex seam, transport-neutral Noise evaluator, trust
+    verification path, handshake-hash export, and encrypted-close proof slice
+    are in place, while `task-00000012` remains the next adapter-facing
+    implementation step.
 
 ### Phase 0 - `lock v1 decisions`
 
@@ -177,9 +178,9 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
     - `task-00000011` `prototype server-auth noise handshake and trust verification on transport-neutral frames`
     - `task-00000012` `prototype quic-preferred transport with wss fallback and local secure session`
 - Exit Criteria:
-    - [ ] a local Rust path can complete the inner handshake and enter transport mode.
-    - [ ] local validation covers both `QUIC` success and `WSS` fallback paths.
-    - [ ] implementation work is driven by protocol docs instead of ad hoc decisions.
+    - [x] a local Rust path can complete the inner handshake and enter transport mode.
+    - [x] local validation covers both `QUIC` success and `WSS` fallback paths.
+    - [x] implementation work is driven by protocol docs instead of ad hoc decisions.
 
 ### Phase 3 - `managed-network compatibility`
 
@@ -209,7 +210,7 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 | task-`00000008` | `write transport-agnostic v1 protocol plus quic and wss bindings` | `Phase 1` | `task-00000003, task-00000004, task-00000006, task-00000007` | `proposed` |
 | task-`00000009` | `define udp-first deployment and observability requirements` | `Phase 1` | `task-00000007, task-00000008` | `proposed` |
 | task-`00000010` | `implement framed duplex abstraction and transport selector` | `Phase 2` | `task-00000005, task-00000007, task-00000008` | `completed` |
-| task-`00000011` | `prototype server-auth noise handshake and trust verification on transport-neutral frames` | `Phase 2` | `task-00000005, task-00000008, task-00000010` | `proposed` |
+| task-`00000011` | `prototype server-auth noise handshake and trust verification on transport-neutral frames` | `Phase 2` | `task-00000005, task-00000008, task-00000010` | `completed` |
 | task-`00000012` | `prototype quic-preferred transport with wss fallback and local secure session` | `Phase 2` | `task-00000005, task-00000008, task-00000009, task-00000010, task-00000011` | `proposed` |
 | task-`00000013` | `allow optional custom ca cert for intercepted wss or quic` | `Phase 3` | `task-00000009, task-00000012` | `proposed` |
 | task-`00000014` | `allow optional http proxy for wss client` | `Phase 3` | `task-00000009, task-00000012, task-00000013` | `proposed` |
@@ -262,9 +263,8 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 ## Immediate Next Actions
 
 1. Close the acceptance workflow for the active `v1-*` transport-policy and protocol/binding docs represented by tasks `00000007` and `00000008`, and finish the remaining deployment/observability guidance for `task-00000009`.
-2. Begin `task-00000011` against the exported selector, framed transport, and secure-ready artifact seams from completed `task-00000010`.
-3. Begin `task-00000012` after the remaining Phase 1 backlog workflow is explicitly closed and the transport-neutral secure-ready prototype from `task-00000011` is accepted.
-4. After the first real client adapters exist, schedule `task-00000013` and
+2. Begin `task-00000012` on top of the completed selector and transport-neutral secure-ready prototype from tasks `00000010` and `00000011`.
+3. After the first real client adapters exist, schedule `task-00000013` and
    `task-00000014` to cover private-CA and proxied-`WSS` operation on managed
    networks.
 
@@ -299,6 +299,13 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
   `QUIC`-first selection skeleton, secure-ready artifact seam, cache/reprobe
   updates, normalized exhausted-fallback reporting, and transport-neutral tests
   before the real carrier adapters land.
+- `2026-03-15`: `task-00000011` completed with
+  `backlog/docs/2026-03-15_task-00000011_noise-secure-ready-prototype.md` plus
+  the Noise/trust implementation in `crates/core/src/noise.rs`,
+  `crates/core/src/trust.rs`, and `crates/core/src/codec.rs`, which proves the
+  transport-neutral `NX` secure-ready path, trust-anchor verification,
+  descriptor-derived prologue binding, handshake-hash export, and encrypted
+  close before concrete carrier adapters land.
 
 ## Completion Checklist
 

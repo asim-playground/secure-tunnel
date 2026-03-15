@@ -42,9 +42,39 @@ The protocol’s core risk is in the inner security model, not the outer carrier
 
 - backlog/tasks/task-00000009_define-udp-first-deployment-and-observability-requirements.md
 
+## Acceptance Closure
+
+- [x] A) Inner handshake path works on framed transports.
+  Evidence: `crates/core/src/noise.rs` now drives the client side of
+  `Noise_NX_25519_ChaChaPoly_BLAKE2s` over `FramedDuplex`,
+  `crates/core/src/descriptor.rs` builds the canonical descriptor-derived
+  prologue, and local tests prove secure-ready success, exact prologue bytes,
+  and descriptor validation on the direct proving path.
+- [x] B) Trust verification path is exercised.
+  Evidence: `crates/core/src/trust.rs` now decodes and verifies
+  `server_key_authorization_v1` against shipped Ed25519 trust anchors,
+  validity windows, descriptor-bound identity fields, and the authenticated
+  responder static key, while tests prove bad authorization rejection and
+  no-fallback behavior on inner trust failure with the real evaluator.
+- [x] C) Shutdown and binding invariants are covered.
+  Evidence: `crates/core/src/noise.rs` exports the final handshake hash `h`
+  into `SecureReadyArtifacts`, wraps the surviving transport in Noise
+  transport mode, proves encrypted close before outer close, and normalizes
+  handshake-time `QUIC` close into the documented fallback path with a local
+  selector test.
+
 ## Implementation Notes
 
 - Favor a minimal local proving slice over a broad implementation; the purpose is to validate the transport-neutral core before deeper adapter work.
 - Keep failure classes compatible with the observability task, but do not block
   the core trust-verification prototype on the full deployment memo landing
   first.
+- Completed by adding `crates/core/src/noise.rs`, `crates/core/src/trust.rs`,
+  and `crates/core/src/codec.rs`, extending `crates/core/src/descriptor.rs`,
+  `crates/core/src/lib.rs`, and the selector evaluator seam in
+  `crates/core/src/selector.rs`, and updating dependencies in
+  `crates/core/Cargo.toml`.
+- Verification: `cargo test -p secure-tunnel-core` and `mise run dev`.
+- Independent review: the first reviewer pass identified evaluator-context,
+  QUIC-close normalization, prologue-coverage, and direct-descriptor-validation
+  gaps; those were fixed before a final reviewer pass reported no findings.

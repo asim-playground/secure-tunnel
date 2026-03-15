@@ -11,13 +11,16 @@
 //! temporarily hosts the first shared API surface for descriptor loading,
 //! transport planning, session states, and transport-neutral framed I/O.
 
+mod codec;
 mod compat;
 mod constants;
 mod descriptor;
 mod error;
+mod noise;
 mod selector;
 mod session;
 mod transport;
+mod trust;
 
 pub use compat::{ParseError, parse};
 pub use constants::{
@@ -29,6 +32,7 @@ pub use descriptor::{
     example_service_descriptor,
 };
 pub use error::{ApiError, ApiResult};
+pub use noise::{NoiseFramedDuplex, SnowNxClientEvaluator};
 pub use selector::{
     SecureReadyEvaluator, SelectedTransport, TransportAttemptOutcome, TransportAttemptTrace,
     TransportConnectors, TransportSelectionError, TransportSelector,
@@ -41,6 +45,7 @@ pub use transport::{
     BoxFuture, CandidateSource, CarrierConnector, CarrierKind, FallbackReason, FramedDuplex,
     TransportCacheSnapshot, TransportCandidate, TransportTarget,
 };
+pub use trust::ServerKeyAuthorizationV1;
 
 /// Returns the stable v1 protocol identifier.
 #[must_use]
