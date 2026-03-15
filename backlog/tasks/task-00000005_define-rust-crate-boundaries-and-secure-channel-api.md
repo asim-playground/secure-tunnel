@@ -33,7 +33,11 @@ The research note now points toward a transport-agnostic secure-channel core wit
 ## Task Dependencies
 
 - backlog/docs/historical/2026-03-14_initial-research.md
-- backlog/tasks/task-00000001_consider-starter-crates.md
+- backlog/docs/v1-transport-selection-and-fallback-policy.md
+- backlog/docs/v1-core-protocol-quic-and-wss-bindings.md
+- backlog/docs/v1-service-descriptor-and-bootstrap-config.md
+- backlog/docs/v1-device-enrollment-and-known-device-policy.md
+- backlog/tasks/completed/task-00000001_consider-starter-crates.md
 - backlog/tasks/task-00000007_define-transport-selection-and-fallback-policy.md
 - backlog/tasks/task-00000008_write-transport-agnostic-v1-protocol-plus-quic-and-wss-bindings.md
 - backlog/tasks/completed/task-00000006_define-device-enrollment-and-known-device-policy.md

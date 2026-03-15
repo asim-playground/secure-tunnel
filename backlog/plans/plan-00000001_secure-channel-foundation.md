@@ -1,5 +1,5 @@
 ---
-status: draft
+status: active
 normative: false
 supersedes: []
 superseded_by: []
@@ -10,7 +10,7 @@ superseded_by: []
 ## Metadata
 
 - Date: `2026-03-14`
-- Status: `draft`
+- Status: `active`
 - Owner: `Asim Ihsan`
 - Related Plans: `none`
 - Related Tasks: `task-00000001, task-00000003, task-00000004, task-00000005, task-00000006, task-00000007, task-00000008, task-00000009, task-00000010, task-00000011, task-00000012`
@@ -113,6 +113,20 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 
 ## Phase Plan
 
+- Current Phase: `Phase 1 - shape implementation seams`
+- Phase Summary:
+  - `Phase 0` is complete: the baseline v1 decisions, device policy, and
+    historical protocol spec are captured and the active `v1-*` docs now carry
+    the implementation-facing source of truth.
+  - `Phase 1` is in progress: the active transport-policy and
+    protocol/binding docs cover much of tasks `00000007` and `00000008`,
+    `task-00000001` now provides the starter crate set for the first prototype
+    slices, `task-00000009` remains only partially addressed, and crate/API
+    architecture work is still open.
+  - `Phase 2` has not started in backlog execution: implementation tasks remain
+    pending until the remaining Phase 1 design work is accepted, even though
+    `task-00000009` is only an advisory input for some early slices.
+
 ### Phase 0 - `lock v1 decisions`
 
 - Objective: turn the research note into explicit v1 design decisions and identify what the older WSS-first artifacts no longer cover.
@@ -121,8 +135,8 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
     - `task-00000006` `define device enrollment and known-device policy`
     - `task-00000004` `write v1 core protocol spec and wss binding`
 - Exit Criteria:
-    - [ ] v1 threat model and non-goals are written down.
-    - [ ] protocol pattern, trust anchor model, device-policy assumptions, and anti-replay stance are explicit.
+    - [x] v1 threat model and non-goals are written down.
+    - [x] protocol pattern, trust anchor model, device-policy assumptions, and anti-replay stance are explicit.
   Status note: `task-00000003`, `task-00000006`, and `task-00000004` capture the earlier baseline; later tasks in this plan supersede the WSS-first assumptions without discarding those historical artifacts.
 
 ### Phase 1 - `shape implementation seams`
@@ -137,7 +151,7 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 - Exit Criteria:
     - [ ] secure-channel, transport, and auth/session responsibilities are separated.
     - [ ] `QUIC` preference and `WSS` fallback behavior are documented precisely enough to implement.
-    - [ ] initial crate choices are concrete enough to support the first proving slices.
+    - [x] initial crate choices are concrete enough to support the first proving slices.
     - [ ] initial implementation order is clear enough to begin coding without structural churn.
 
 ### Phase 2 - `start proving slices`
@@ -156,7 +170,7 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 
 | Task ID | Title | Phase | Depends On | Status |
 |---|---|---|---|---|
-| task-`00000001` | `consider starter crates` | `Phase 1` | `none` | `proposed` |
+| task-`00000001` | `consider starter crates` | `Phase 1` | `none` | `completed` |
 | task-`00000003` | `define threat model and v1 protocol decisions` | `Phase 0` | `none` | `completed` |
 | task-`00000004` | `write v1 core protocol spec and wss binding` | `Phase 0` | `task-00000003, task-00000006` | `completed` |
 | task-`00000005` | `define rust crate boundaries and secure-channel api` | `Phase 1` | `task-00000001, task-00000006, task-00000007, task-00000008` | `proposed` |
@@ -177,8 +191,9 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
   first trust-verification prototype emits compatible failure distinctions, but
   deployment guidance should not block a local transport-neutral proof slice.
 - `task-00000007` and `task-00000008` still show `proposed` because the active
-  docs exist as draft design output, but the backlog acceptance workflow for
-  those tasks has not yet been explicitly closed.
+  docs already exist as active implementation-facing artifacts, but the
+  backlog acceptance workflow for those tasks has not yet been explicitly
+  closed.
 
 ## Validation Strategy
 
@@ -208,9 +223,9 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 
 ## Immediate Next Actions
 
-1. Complete `task-00000001` to choose the crate set needed for `QUIC`, `WSS`, the shared transport layer, and local verification.
-2. Ratify the active `v1-*` protocol and transport-policy docs against tasks `00000007` and `00000008`, then complete `task-00000009`.
-3. Complete `task-00000005` after the protocol/binding split is clear, then begin Phase 2 implementation tasks.
+1. Close the acceptance workflow for the active `v1-*` transport-policy and protocol/binding docs represented by tasks `00000007` and `00000008`, and finish the remaining deployment/observability guidance for `task-00000009`.
+2. Complete `task-00000005` using the starter crate recommendations plus the active protocol docs to define crate boundaries and secure-channel APIs.
+3. Begin Phase 2 implementation tasks once the remaining Phase 1 architecture work is explicitly closed.
 
 ## Implementation Notes
 
@@ -223,6 +238,15 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 - The active implementation-facing docs now live under stable `v1-*` filenames,
   including threat model, transport policy, service descriptor, shared
   protocol, glossary, and device policy artifacts.
+- `2026-03-15`: phase tracking refreshed so the plan status is `active`,
+  `Phase 0` is marked complete, and `Phase 1` is explicitly identified as the
+  current active phase while tasks `00000007` and `00000008` remain open for
+  backlog workflow closure and `task-00000009` remains only partially covered
+  by the current active docs.
+- `2026-03-15`: `task-00000001` completed with
+  `backlog/docs/2026-03-15_starter-crate-recommendations.md`, which locks the
+  first-choice Phase 2 crate stack and records which dependency decisions are
+  still provisional.
 
 ## Completion Checklist
 
@@ -236,3 +260,4 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 
 - `2026-03-14` `Initial plan created from the research note and bootstrap backlog state.`
 - `2026-03-14` `Plan updated after later research clarification to treat raw QUIC as the preferred outer transport and WSS as fallback, with one unchanged inner protocol.`
+- `2026-03-15` `Refreshed phase tracking to mark Phase 0 complete, set the plan status to active, and identify Phase 1 as the current execution phase.`

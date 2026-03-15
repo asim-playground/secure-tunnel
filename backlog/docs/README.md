@@ -45,3 +45,5 @@ implementation work.
 ## Working Notes
 
 - `2026-03-15_doc-set-consistency-review.md`
+- `2026-03-15_plan-phase-tracking-refresh.md`
+- `2026-03-15_starter-crate-recommendations.md`
