@@ -13,7 +13,7 @@ superseded_by: []
 - Status: `active`
 - Owner: `Asim Ihsan`
 - Related Plans: `none`
-- Related Tasks: `task-00000001, task-00000003, task-00000004, task-00000005, task-00000006, task-00000007, task-00000008, task-00000009, task-00000010, task-00000011, task-00000012`
+- Related Tasks: `task-00000001, task-00000003, task-00000004, task-00000005, task-00000006, task-00000007, task-00000008, task-00000009, task-00000010, task-00000011, task-00000012, task-00000013, task-00000014`
 
 ## Summary
 
@@ -100,6 +100,16 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 - Impact: implementation could land without the metrics and runbook assumptions needed to operate `QUIC` safely on hostile or degraded networks.
 - Notes: the later research calls deployment and observability first-class once `QUIC` is in scope.
 
+### Enterprise network compatibility
+
+- Missing: backlog tasks that explicitly cover client operation behind private
+  PKI, TLS interception, and HTTP proxy requirements on managed networks.
+- Impact: the first real carrier adapters could work in direct-connect
+  environments yet still fail in the enterprise network classes already called
+  out by the threat model.
+- Notes: these concerns belong above the inner secure-channel trust model and
+  should extend the outer-carrier compatibility story rather than weaken it.
+
 ## Strategy
 
 - Keep the earlier security decisions, but supersede the older WSS-first path with transport-selector documentation before writing network code.
@@ -110,6 +120,10 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 - Treat deployment and observability guidance as an advisory input for some
   architecture and prototype work, not a blanket blocker for every earlier
   implementation slice.
+- Follow the first working `QUIC`/`WSS` prototype with explicit client
+  compatibility tasks for optional custom CA trust and optional proxied `WSS`
+  so managed-network support lands as deliberate scope instead of ad hoc
+  adapter flags.
 
 ## Phase Plan
 
@@ -167,6 +181,21 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
     - [ ] local validation covers both `QUIC` success and `WSS` fallback paths.
     - [ ] implementation work is driven by protocol docs instead of ad hoc decisions.
 
+### Phase 3 - `managed-network compatibility`
+
+- Objective: extend the first real client transport paths to operate in managed
+  environments that require private outer-TLS trust or explicit `WSS` proxying.
+- Candidate Tasks:
+    - `task-00000013` `allow optional custom ca cert for intercepted wss or quic`
+    - `task-00000014` `allow optional http proxy for wss client`
+- Exit Criteria:
+    - [ ] the client can optionally trust a configured outer-TLS CA for
+      compatible `WSS` and `QUIC` deployments without weakening inner trust.
+    - [ ] the client can optionally route `WSS` through a configured HTTP proxy
+      without changing transport-selection semantics.
+    - [ ] compatibility work distinguishes outer network-policy failures from
+      inner trust failures in tests and observability.
+
 ## Backlog Task Map
 
 | Task ID | Title | Phase | Depends On | Status |
@@ -182,6 +211,8 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 | task-`00000010` | `implement framed duplex abstraction and transport selector` | `Phase 2` | `task-00000005, task-00000007, task-00000008` | `completed` |
 | task-`00000011` | `prototype server-auth noise handshake and trust verification on transport-neutral frames` | `Phase 2` | `task-00000005, task-00000008, task-00000010` | `proposed` |
 | task-`00000012` | `prototype quic-preferred transport with wss fallback and local secure session` | `Phase 2` | `task-00000005, task-00000008, task-00000009, task-00000010, task-00000011` | `proposed` |
+| task-`00000013` | `allow optional custom ca cert for intercepted wss or quic` | `Phase 3` | `task-00000009, task-00000012` | `proposed` |
+| task-`00000014` | `allow optional http proxy for wss client` | `Phase 3` | `task-00000009, task-00000012, task-00000013` | `proposed` |
 
 ## Dependency Notes
 
@@ -195,6 +226,12 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
   docs already exist as active implementation-facing artifacts, but the
   backlog acceptance workflow for those tasks has not yet been explicitly
   closed.
+- `task-00000013` and `task-00000014` intentionally land after
+  `task-00000012` so private-CA and proxy compatibility can target the first
+  real `WSS` and `QUIC` client adapters rather than the earlier mock seams.
+- `task-00000014` depends on `task-00000013` so proxy-path work reuses the
+  first custom-CA config decisions instead of inventing a second overlapping
+  outer-TLS trust surface.
 
 ## Validation Strategy
 
@@ -227,6 +264,9 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 1. Close the acceptance workflow for the active `v1-*` transport-policy and protocol/binding docs represented by tasks `00000007` and `00000008`, and finish the remaining deployment/observability guidance for `task-00000009`.
 2. Begin `task-00000011` against the exported selector, framed transport, and secure-ready artifact seams from completed `task-00000010`.
 3. Begin `task-00000012` after the remaining Phase 1 backlog workflow is explicitly closed and the transport-neutral secure-ready prototype from `task-00000011` is accepted.
+4. After the first real client adapters exist, schedule `task-00000013` and
+   `task-00000014` to cover private-CA and proxied-`WSS` operation on managed
+   networks.
 
 ## Implementation Notes
 
