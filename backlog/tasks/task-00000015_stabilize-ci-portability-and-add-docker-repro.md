@@ -91,3 +91,10 @@ an explicit Docker-based path.
   because those files are internal workflow/planning artifacts and were causing
   `mise run ci` to fail on longstanding formatting debt unrelated to product
   docs or code correctness.
+- Follow-up after pushing to `main`: `.github/workflows/ci.yml` now uses a
+  target metadata matrix for cross builds so only
+  `aarch64-unknown-linux-gnu` attempts the `secure-tunnel-py`
+  extension-module artifact. The musl job still cross-tests the portable Rust
+  crates, but no longer asks Rust to emit an unsupported `cdylib`.
+- Added `**/lcov.info` to `.gitignore` so local coverage output from
+  `mise run ci` does not show up as a tracked follow-up diff.

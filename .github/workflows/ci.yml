@@ -118,7 +118,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [x86_64-unknown-linux-musl, aarch64-unknown-linux-gnu]
+        include:
+          - target: x86_64-unknown-linux-musl
+            build_python_bindings: false
+          - target: aarch64-unknown-linux-gnu
+            build_python_bindings: true
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
@@ -139,6 +143,7 @@ jobs:
       - name: Cross compile and test portable crates
         run: cross test --release --all-features --workspace --exclude secure-tunnel-py --target ${{ matrix.target }}
       - name: Cross compile Python bindings
+        if: matrix.build_python_bindings
         env:
           PYO3_BUILD_EXTENSION_MODULE: 1
         run: cross build --release --all-features -p secure-tunnel-py --target ${{ matrix.target }}

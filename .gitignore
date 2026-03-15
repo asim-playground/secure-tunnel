@@ -20,6 +20,7 @@ target/
 .DS_Store
 .direnv/
 .mise/
+**/lcov.info
 
 # Track repo-local backlog artifacts even though backlog/ is globally ignored.
 !backlog/

@@ -99,6 +99,19 @@
   markdown lint gate.
 - Local validation: `mise run ci` completed successfully after the markdown
   lint scope change and the runtime-path plus coverage-task updates.
+- Main-branch `CI` run `23118583152` still failed in `Cross Compile
+  (x86_64-unknown-linux-musl)` because the workflow attempted
+  `cross build --release --all-features -p secure-tunnel-py --target
+  x86_64-unknown-linux-musl`, and Rust rejected `secure-tunnel-py` as a
+  `cdylib` for that musl target.
+- Repo update: `.github/workflows/ci.yml` now models the cross matrix with
+  explicit per-target metadata and only runs the PyO3 extension-module build
+  step for `aarch64-unknown-linux-gnu`; the musl leg still cross-tests the
+  portable Rust workspace crates but no longer attempts the unsupported Python
+  extension artifact.
+- Repo update: `.gitignore` now ignores `**/lcov.info` so local `mise run ci`
+  coverage runs do not keep re-dirtying the working copy with generated LCOV
+  artifacts.
 
 ## Conclusions
 
@@ -126,8 +139,12 @@
 - The canonical local/CI pipeline should not lint internal backlog and agent
   workflow notes. Treating those files as release-doc-quality Markdown created
   noisy failures that obscured actual code and workflow regressions.
+- The Python cross-build step needs target-aware gating in the workflow itself.
+  `secure-tunnel-py` can remain covered on the GNU cross target without asking
+  the musl job to produce an unsupported `cdylib`.
 
 ## Next Actions
 
-- Push the branch or open a PR so GitHub Actions can exercise the exact
-  `cross build` path with the new `Cross.toml` passthrough in place.
+- Push the workflow follow-up so GitHub Actions can re-run the cross matrix
+  with the musl Python-binding step removed and confirm the main branch is
+  fully green.
