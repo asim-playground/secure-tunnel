@@ -2,4 +2,10 @@
 #MISE description="Run tests with coverage instrumentation"
 set -euo pipefail
 
+coverage_target_dir="${MISE_PROJECT_ROOT}/target/llvm-cov-target"
+export CARGO_TARGET_DIR="${coverage_target_dir}"
+
+source "${MISE_PROJECT_ROOT}/mise-tasks/rust/python-runtime-env"
+
+cargo llvm-cov clean --workspace
 cargo llvm-cov nextest --workspace --all-features --no-report

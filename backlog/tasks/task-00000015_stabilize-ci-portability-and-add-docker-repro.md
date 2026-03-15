@@ -75,3 +75,19 @@ an explicit Docker-based path.
   repro for the unsupported cross-target PyO3 test-harness link path plus an
   easy way to run the fixed extension-module build path from the same
   containerized setup.
+- Updated `mise-tasks/rust/test` and `mise-tasks/rust/watch` to source a
+  shared Python runtime-library helper
+  before `cargo nextest`, so the macOS host-side Rust harness can load
+  `libpython3.14.dylib` from the pinned `mise` Python install instead of
+  aborting.
+- Updated `mise-tasks/rust/test-coverage`, `mise-tasks/rust/coverage`, and
+  `mise-tasks/rust/coverage-ci` so coverage runs use a shared
+  `target/llvm-cov-target` directory and execute normal Rust nextest coverage
+  with the same Python runtime-library fix. Combined with new Rust-side wrapper
+  tests in `crates/python/src/lib.rs`, this keeps `secure-tunnel-py`
+  represented in the LCOV artifact instead of treating it as an accepted
+  exclusion.
+- Scoped `.markdownlint-cli2.jsonc` away from `AGENTS.md` and `backlog/**`,
+  because those files are internal workflow/planning artifacts and were causing
+  `mise run ci` to fail on longstanding formatting debt unrelated to product
+  docs or code correctness.
