@@ -35,7 +35,7 @@ The protocol’s core risk is in the inner security model, not the outer carrier
 
 - backlog/tasks/task-00000005_define-rust-crate-boundaries-and-secure-channel-api.md
 - backlog/tasks/task-00000008_write-transport-agnostic-v1-protocol-plus-quic-and-wss-bindings.md
-- backlog/tasks/task-00000010_implement-framed-duplex-abstraction-and-transport-selector.md
+- backlog/tasks/completed/task-00000010_implement-framed-duplex-abstraction-and-transport-selector.md
 - backlog/plans/plan-00000001_secure-channel-foundation.md
 
 ## Advisory Inputs

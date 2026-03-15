@@ -5,7 +5,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::transport::{CarrierKind, FallbackReason};
+use crate::transport::{CarrierKind, FallbackReason, FramedDuplex};
 
 /// Higher-layer view of a successful secure channel.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,6 +16,31 @@ pub struct SecureReadyReport {
     pub cache_state: CacheDisposition,
     /// Normalized fallback reason, when fallback occurred.
     pub fallback_reason: Option<FallbackReason>,
+}
+
+/// Secure-channel artifacts produced when a transport reaches `Secure Ready`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SecureReadyArtifacts {
+    /// Handshake hash `h` or equivalent transcript binding, when available.
+    pub handshake_hash: Option<Vec<u8>>,
+    /// Additional channel-binding bytes reserved for later session work.
+    pub channel_binding: Option<Vec<u8>>,
+}
+
+/// Successful secure-ready transition with the surviving transport and artifacts.
+pub struct SecureReadyTransport {
+    /// Framed transport that reached `Secure Ready`.
+    pub transport: Box<dyn FramedDuplex>,
+    /// Secure-ready artifacts exposed to later session or device flows.
+    pub artifacts: SecureReadyArtifacts,
+}
+
+impl SecureReadyTransport {
+    /// Returns the carrier backing the secure-ready transport.
+    #[must_use]
+    pub fn carrier(&self) -> CarrierKind {
+        self.transport.carrier()
+    }
 }
 
 /// Whether transport choice came from a live probe or cached posture.

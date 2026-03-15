@@ -123,9 +123,10 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
     `task-00000001` now provides the starter crate set for the first prototype
     slices, `task-00000009` remains only partially addressed, and crate/API
     architecture work is still open.
-  - `Phase 2` has not started in backlog execution: implementation tasks remain
-    pending until the remaining Phase 1 design work is accepted, even though
-    `task-00000009` is only an advisory input for some early slices.
+  - `Phase 2` has started with `task-00000010` complete: the shared selector
+    and framed-duplex proving slice is in place, while `task-00000011` and
+    `task-00000012` still depend on the remaining backlog closure around
+    transport policy, protocol/binding docs, and deployment guidance.
 
 ### Phase 0 - `lock v1 decisions`
 
@@ -178,7 +179,7 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 | task-`00000007` | `define transport selection and fallback policy` | `Phase 1` | `task-00000003, task-00000004, task-00000006` | `proposed` |
 | task-`00000008` | `write transport-agnostic v1 protocol plus quic and wss bindings` | `Phase 1` | `task-00000003, task-00000004, task-00000006, task-00000007` | `proposed` |
 | task-`00000009` | `define udp-first deployment and observability requirements` | `Phase 1` | `task-00000007, task-00000008` | `proposed` |
-| task-`00000010` | `implement framed duplex abstraction and transport selector` | `Phase 2` | `task-00000005, task-00000007, task-00000008` | `proposed` |
+| task-`00000010` | `implement framed duplex abstraction and transport selector` | `Phase 2` | `task-00000005, task-00000007, task-00000008` | `completed` |
 | task-`00000011` | `prototype server-auth noise handshake and trust verification on transport-neutral frames` | `Phase 2` | `task-00000005, task-00000008, task-00000010` | `proposed` |
 | task-`00000012` | `prototype quic-preferred transport with wss fallback and local secure session` | `Phase 2` | `task-00000005, task-00000008, task-00000009, task-00000010, task-00000011` | `proposed` |
 
@@ -224,8 +225,8 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 ## Immediate Next Actions
 
 1. Close the acceptance workflow for the active `v1-*` transport-policy and protocol/binding docs represented by tasks `00000007` and `00000008`, and finish the remaining deployment/observability guidance for `task-00000009`.
-2. Start `task-00000010` against the exported descriptor, transport, and session seams from `task-00000005`.
-3. Begin `task-00000011` and `task-00000012` after the remaining Phase 1 backlog workflow is explicitly closed.
+2. Begin `task-00000011` against the exported selector, framed transport, and secure-ready artifact seams from completed `task-00000010`.
+3. Begin `task-00000012` after the remaining Phase 1 backlog workflow is explicitly closed and the transport-neutral secure-ready prototype from `task-00000011` is accepted.
 
 ## Implementation Notes
 
@@ -252,6 +253,12 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
   plus the first transport-neutral Rust API in `crates/core/src/`, which
   fixes ownership boundaries across the future secure core, selector, carrier
   adapters, and session layer without forcing the multi-crate split early.
+- `2026-03-15`: `task-00000010` completed with
+  `backlog/docs/2026-03-15_framed-duplex-selector-implementation.md` plus the
+  selector implementation in `crates/core/src/selector.rs`, which adds the
+  `QUIC`-first selection skeleton, secure-ready artifact seam, cache/reprobe
+  updates, normalized exhausted-fallback reporting, and transport-neutral tests
+  before the real carrier adapters land.
 
 ## Completion Checklist
 

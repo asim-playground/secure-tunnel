@@ -102,6 +102,16 @@ pub enum FallbackReason {
     OuterQuicClosedEarly,
 }
 
+impl fmt::Display for FallbackReason {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::OuterPathFailure => formatter.write_str("outer_path_failure"),
+            Self::OuterQuicRejected => formatter.write_str("outer_quic_rejected"),
+            Self::OuterQuicClosedEarly => formatter.write_str("outer_quic_closed_early"),
+        }
+    }
+}
+
 /// Transport-neutral framed record I/O for the secure-channel engine.
 pub trait FramedDuplex: Send {
     /// Returns the carrier backing the framed duplex.

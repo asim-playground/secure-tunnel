@@ -85,6 +85,7 @@ impl ServiceDescriptor {
             &self.selection_policy,
             quic_target,
             wss_target,
+            cached_quic_bad,
         ))
     }
 
@@ -202,11 +203,16 @@ fn plan_for_live_attempt(
     policy: &SelectionPolicy,
     quic_target: QuicTarget,
     wss_target: Option<WssTarget>,
+    reprobe_after_cached_fallback: bool,
 ) -> Vec<TransportCandidate> {
     let mut plan = Vec::with_capacity(2);
     plan.push(TransportCandidate {
         target: TransportTarget::Quic(quic_target),
-        source: CandidateSource::PreferredCarrier,
+        source: if reprobe_after_cached_fallback {
+            CandidateSource::QuicReprobeAfterCachedFallback
+        } else {
+            CandidateSource::PreferredCarrier
+        },
     });
     if policy.allow_wss_fallback {
         if let Some(wss) = wss_target {
@@ -324,7 +330,10 @@ mod tests {
         let plan = descriptor.connect_plan(Some(&cache), 2_000).unwrap();
 
         assert_eq!(plan[0].target.carrier(), CarrierKind::Quic);
-        assert_eq!(plan[0].source, CandidateSource::PreferredCarrier);
+        assert_eq!(
+            plan[0].source,
+            CandidateSource::QuicReprobeAfterCachedFallback
+        );
     }
 
     #[test]

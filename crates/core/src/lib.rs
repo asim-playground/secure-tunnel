@@ -15,6 +15,7 @@ mod compat;
 mod constants;
 mod descriptor;
 mod error;
+mod selector;
 mod session;
 mod transport;
 
@@ -28,7 +29,14 @@ pub use descriptor::{
     example_service_descriptor,
 };
 pub use error::{ApiError, ApiResult};
-pub use session::{CacheDisposition, CloseDirective, SecureReadyReport, SessionPhase};
+pub use selector::{
+    SecureReadyEvaluator, SelectedTransport, TransportAttemptOutcome, TransportAttemptTrace,
+    TransportConnectors, TransportSelectionError, TransportSelector,
+};
+pub use session::{
+    CacheDisposition, CloseDirective, SecureReadyArtifacts, SecureReadyReport,
+    SecureReadyTransport, SessionPhase,
+};
 pub use transport::{
     BoxFuture, CandidateSource, CarrierConnector, CarrierKind, FallbackReason, FramedDuplex,
     TransportCacheSnapshot, TransportCandidate, TransportTarget,
