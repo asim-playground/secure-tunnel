@@ -149,10 +149,10 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
     - `task-00000008` `write transport-agnostic v1 protocol plus quic and wss bindings`
     - `task-00000009` `define udp-first deployment and observability requirements`
 - Exit Criteria:
-    - [ ] secure-channel, transport, and auth/session responsibilities are separated.
+    - [x] secure-channel, transport, and auth/session responsibilities are separated.
     - [ ] `QUIC` preference and `WSS` fallback behavior are documented precisely enough to implement.
     - [x] initial crate choices are concrete enough to support the first proving slices.
-    - [ ] initial implementation order is clear enough to begin coding without structural churn.
+    - [x] initial implementation order is clear enough to begin coding without structural churn.
 
 ### Phase 2 - `start proving slices`
 
@@ -173,7 +173,7 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 | task-`00000001` | `consider starter crates` | `Phase 1` | `none` | `completed` |
 | task-`00000003` | `define threat model and v1 protocol decisions` | `Phase 0` | `none` | `completed` |
 | task-`00000004` | `write v1 core protocol spec and wss binding` | `Phase 0` | `task-00000003, task-00000006` | `completed` |
-| task-`00000005` | `define rust crate boundaries and secure-channel api` | `Phase 1` | `task-00000001, task-00000006, task-00000007, task-00000008` | `proposed` |
+| task-`00000005` | `define rust crate boundaries and secure-channel api` | `Phase 1` | `task-00000001, task-00000006, task-00000007, task-00000008` | `completed` |
 | task-`00000006` | `define device enrollment and known-device policy` | `Phase 0` | `task-00000003` | `completed` |
 | task-`00000007` | `define transport selection and fallback policy` | `Phase 1` | `task-00000003, task-00000004, task-00000006` | `proposed` |
 | task-`00000008` | `write transport-agnostic v1 protocol plus quic and wss bindings` | `Phase 1` | `task-00000003, task-00000004, task-00000006, task-00000007` | `proposed` |
@@ -218,14 +218,14 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 
 | Question | Needed By | Owner | Resolution |
 |---|---|---|---|
-| How much of the framing and session envelope should be transport-agnostic from day one? | before task-00000005 completes | Asim Ihsan | `open` |
+| How much of the framing and session envelope should be transport-agnostic from day one? | before task-00000005 completes | Asim Ihsan | `resolved by task-00000005` |
 | What exact attestation evidence schema should the protocol standardize beyond the current opaque optional enrollment payload? | before task-00000008 completes | Asim Ihsan | `open` |
 
 ## Immediate Next Actions
 
 1. Close the acceptance workflow for the active `v1-*` transport-policy and protocol/binding docs represented by tasks `00000007` and `00000008`, and finish the remaining deployment/observability guidance for `task-00000009`.
-2. Complete `task-00000005` using the starter crate recommendations plus the active protocol docs to define crate boundaries and secure-channel APIs.
-3. Begin Phase 2 implementation tasks once the remaining Phase 1 architecture work is explicitly closed.
+2. Start `task-00000010` against the exported descriptor, transport, and session seams from `task-00000005`.
+3. Begin `task-00000011` and `task-00000012` after the remaining Phase 1 backlog workflow is explicitly closed.
 
 ## Implementation Notes
 
@@ -247,6 +247,11 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
   `backlog/docs/2026-03-15_starter-crate-recommendations.md`, which locks the
   first-choice Phase 2 crate stack and records which dependency decisions are
   still provisional.
+- `2026-03-15`: `task-00000005` completed with
+  `backlog/docs/2026-03-15_rust-crate-boundaries-and-secure-channel-api.md`
+  plus the first transport-neutral Rust API in `crates/core/src/`, which
+  fixes ownership boundaries across the future secure core, selector, carrier
+  adapters, and session layer without forcing the multi-crate split early.
 
 ## Completion Checklist
 

@@ -5,109 +5,37 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-//! Core library for Secure Tunnel.
+//! Transport-agnostic core types for Secure Tunnel v1.
 //!
-//! This library provides the core functionality for parsing and evaluating
-//! arithmetic expressions of the form `1+2+3`.
+//! The repository is still converging on the final crate split, so this crate
+//! temporarily hosts the first shared API surface for descriptor loading,
+//! transport planning, session states, and transport-neutral framed I/O.
 
-use thiserror::Error;
+mod compat;
+mod constants;
+mod descriptor;
+mod error;
+mod session;
+mod transport;
 
-/// Our custom error type for parsing failures.
-#[derive(Error, Debug, Clone)]
-pub enum ParseError {
-    /// A generic parsing error with a descriptive message.
-    #[error("Parse error: {0}")]
-    Generic(String),
-}
+pub use compat::{ParseError, parse};
+pub use constants::{
+    MAX_APPLICATION_PLAINTEXT_SIZE, MAX_RECORD_PAYLOAD_SIZE, NOISE_SUITE_V1, PROTOCOL_ID_V1,
+    QUIC_ALPN_V1, WSS_SUBPROTOCOL_V1,
+};
+pub use descriptor::{
+    CarrierSet, QuicTarget, SelectionPolicy, ServiceDescriptor, TrustAnchor, WssTarget,
+    example_service_descriptor,
+};
+pub use error::{ApiError, ApiResult};
+pub use session::{CacheDisposition, CloseDirective, SecureReadyReport, SessionPhase};
+pub use transport::{
+    BoxFuture, CandidateSource, CarrierConnector, CarrierKind, FallbackReason, FramedDuplex,
+    TransportCacheSnapshot, TransportCandidate, TransportTarget,
+};
 
-/// A simple arithmetic expression parser that accepts expressions like "1+2+3"
-/// and computes their sum.
-///
-/// # Errors
-///
-/// Returns a `ParseError` if:
-/// - The input contains non-numeric characters (except '+')
-/// - The input has invalid syntax (e.g., "1+" or "+2")
-/// - The input is empty or contains only whitespace
-///
-/// # Examples
-///
-/// ```
-/// use secure_tunnel_core::parse;
-///
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// assert_eq!(parse("1+2+3")?, "6");
-/// assert_eq!(parse("10+20+30")?, "60");
-/// # Ok(())
-/// # }
-/// ```
-pub fn parse(input: &str) -> Result<String, ParseError> {
-    let trimmed = input.trim();
-    if trimmed.is_empty() {
-        return Err(ParseError::Generic("input is empty".to_owned()));
-    }
-
-    let mut total = 0_i64;
-    for part in trimmed.split('+') {
-        let number = part.trim();
-        if number.is_empty() {
-            return Err(ParseError::Generic("expected a number between '+' operators".to_owned()));
-        }
-
-        let value = number.parse::<i64>().map_err(|error| {
-            ParseError::Generic(format!("invalid integer `{number}`: {error}"))
-        })?;
-        total = total.checked_add(value).ok_or_else(|| {
-            ParseError::Generic(format!(
-                "integer overflow while summing expression near `{number}`"
-            ))
-        })?;
-    }
-
-    Ok(total.to_string())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse() {
-        match parse("1+2+3") {
-            Ok(result) => assert_eq!(result, "6"),
-            Err(e) => panic!("Expected successful parse of '1+2+3', got error: {e}"),
-        }
-        
-        match parse("10+20+30") {
-            Ok(result) => assert_eq!(result, "60"),
-            Err(e) => panic!("Expected successful parse of '10+20+30', got error: {e}"),
-        }
-        
-        match parse("100+200+300") {
-            Ok(result) => assert_eq!(result, "600"),
-            Err(e) => panic!("Expected successful parse of '100+200+300', got error: {e}"),
-        }
-    }
-
-    #[test]
-    fn test_parse_invalid() {
-        let res = parse("1+");
-        if let Err(e) = res {
-            assert!(e.to_string().contains("expected a number"));
-        } else {
-            println!("Expected an error, but got a result");
-            println!("Result: {res:?}");
-            panic!("Expected an error, but got a result");
-        }
-    }
-
-    #[test]
-    fn test_parse_overflow() {
-        let res = parse("9223372036854775807+1");
-        if let Err(e) = res {
-            assert!(e.to_string().contains("integer overflow"));
-        } else {
-            panic!("Expected overflow error, but got a result: {res:?}");
-        }
-    }
+/// Returns the stable v1 protocol identifier.
+#[must_use]
+pub const fn protocol_id_v1() -> &'static str {
+    PROTOCOL_ID_V1
 }

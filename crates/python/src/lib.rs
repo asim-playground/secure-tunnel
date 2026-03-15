@@ -5,20 +5,6 @@ use pyo3::prelude::*;
 use secure_tunnel_core as core;
 
 /// Parse and evaluate a simple arithmetic expression.
-///
-/// Args:
-///     expression (str): The arithmetic expression to evaluate (e.g., "1+2+3")
-///
-/// Returns:
-///     str: The result of evaluating the expression
-///
-/// Raises:
-///     ValueError: If the expression cannot be parsed
-///
-/// Example:
-///     >>> import secure_tunnel
-///     >>> secure_tunnel.parse("1+2+3")
-///     '6'
 #[pyfunction]
 fn parse(expression: &str) -> PyResult<String> {
     core::parse(expression).map_err(|e| PyValueError::new_err(e.to_string()))

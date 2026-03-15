@@ -1,5 +1,9 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+//! WASM-exported helpers used by the Go/WASI scaffold binding.
+
 use secure_tunnel_core::parse;
+use std::alloc::Layout;
+use std::ptr;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 // Initialize Talc as the global allocator for WebAssembly
 #[cfg(target_arch = "wasm32")]
@@ -18,9 +22,9 @@ pub const VERSION: &str = "1.0.0";
 /// The memory must be freed using `deallocate`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn allocate(size: usize) -> *mut u8 {
-    let alloc_size = size.max(1);
-    let layout = std::alloc::Layout::from_size_align(alloc_size, 8).unwrap();
-    unsafe { std::alloc::alloc(layout) }
+    allocation_layout(size).map_or(ptr::null_mut(), |layout| unsafe {
+        std::alloc::alloc(layout)
+    })
 }
 
 /// Deallocates memory previously allocated with `allocate`.
@@ -31,10 +35,10 @@ pub unsafe extern "C" fn allocate(size: usize) -> *mut u8 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn deallocate(ptr: *mut u8, size: usize) {
     if !ptr.is_null() {
-        let alloc_size = size.max(1);
-        let layout = std::alloc::Layout::from_size_align(alloc_size, 8).unwrap();
-        unsafe {
-            std::alloc::dealloc(ptr, layout);
+        if let Some(layout) = allocation_layout(size) {
+            unsafe {
+                std::alloc::dealloc(ptr, layout);
+            }
         }
     }
 }
@@ -56,87 +60,22 @@ pub unsafe extern "C" fn deallocate(ptr: *mut u8, size: usize) {
 pub unsafe extern "C" fn parse_expression(ptr: *const u8, len: usize) -> u64 {
     let input_bytes = unsafe { std::slice::from_raw_parts(ptr, len) };
 
-    // Convert bytes to string
-    match std::str::from_utf8(input_bytes) {
-        Ok(input_str) => {
-            // Parse the expression
-            match parse(input_str) {
-                Ok(result) => {
-                    // Allocate memory for result
-                    let result_bytes = result.as_bytes();
-                    let result_len = result_bytes.len();
-                    let result_ptr = unsafe { allocate(result_len) };
-
-                    // Check allocation success
-                    if result_ptr.is_null() {
-                        return 0; // Return 0 on allocation failure
-                    }
-
-                    // Copy result to allocated memory
-                    unsafe {
-                        std::ptr::copy_nonoverlapping(result_bytes.as_ptr(), result_ptr, result_len);
-                    }
-
-                    // No need to forget the string - let it be dropped normally
-                    // The bytes are already copied to wasm memory
-
-                    // Return packed pointer+length
-                    ((result_ptr as u64) << 32) | (result_len as u64)
-                }
-                Err(e) => {
-                    // Handle error - allocate memory for error message
-                    let error_msg = format!("Error: {}", e);
-                    let error_bytes = error_msg.as_bytes();
-                    let error_len = error_bytes.len();
-                    let error_ptr = unsafe { allocate(error_len) };
-
-                    // Check allocation success
-                    if error_ptr.is_null() {
-                        return 0; // Return 0 on allocation failure
-                    }
-
-                    // Copy error to allocated memory
-                    unsafe {
-                        std::ptr::copy_nonoverlapping(error_bytes.as_ptr(), error_ptr, error_len);
-                    }
-
-                    // No need to forget the string - let it be dropped normally
-                    // The bytes are already copied to wasm memory
-
-                    // Return packed pointer+length with error flag in high bit
-                    ((error_ptr as u64) << 32) | (error_len as u64)
-                }
-            }
-        }
-        Err(_) => {
-            // Invalid UTF-8 - allocate memory for error message
-            let error_msg = "Error: invalid UTF-8 in input";
-            let error_bytes = error_msg.as_bytes();
-            let error_len = error_bytes.len();
-            let error_ptr = unsafe { allocate(error_len) };
-
-            // Check allocation success
-            if error_ptr.is_null() {
-                return 0; // Return 0 on allocation failure
-            }
-
-            // Copy error to allocated memory
-            unsafe {
-                std::ptr::copy_nonoverlapping(error_bytes.as_ptr(), error_ptr, error_len);
-            }
-
-            // Return packed pointer+length with error flag
-            ((error_ptr as u64) << 32) | (error_len as u64)
-        }
+    if let Ok(input_str) = std::str::from_utf8(input_bytes) {
+        return match parse(input_str) {
+            Ok(result) => pack_bytes(result.as_bytes()),
+            Err(e) => pack_bytes(format!("Error: {e}").as_bytes()),
+        };
     }
+
+    pack_bytes(b"Error: invalid UTF-8 in input")
 }
 
-/// Check if the result of parse_expression is an error.
+/// Check if the result of `parse_expression` is an error.
 /// The first byte of the result is checked to determine if it starts with "Error:".
 ///
 /// # Safety
 ///
-/// The caller must ensure the ptr/len pair was obtained from a call to parse_expression
+/// The caller must ensure the ptr/len pair was obtained from a call to `parse_expression`
 /// and the memory is still valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn is_parse_error(ptr: *const u8, len: usize) -> i32 {
@@ -145,22 +84,36 @@ pub unsafe extern "C" fn is_parse_error(ptr: *const u8, len: usize) -> i32 {
     }
 
     let slice = unsafe { std::slice::from_raw_parts(ptr, 6.min(len)) };
-    // Check if it starts with "Error:"
-    if slice == b"Error:" {
-        1
-    } else {
-        0
-    }
+    i32::from(slice == b"Error:")
 }
 
 /// Get the current timestamp in milliseconds since the UNIX epoch.
 /// This demonstrates using WASI to get system time.
 #[unsafe(no_mangle)]
 pub extern "C" fn get_timestamp_ms() -> u64 {
-    match SystemTime::now().duration_since(UNIX_EPOCH) {
-        Ok(duration) => duration.as_millis() as u64,
-        Err(_) => 0,
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .and_then(|duration| u64::try_from(duration.as_millis()).ok())
+        .unwrap_or(0)
+}
+
+fn allocation_layout(size: usize) -> Option<Layout> {
+    Layout::from_size_align(size.max(1), 8).ok()
+}
+
+fn pack_bytes(bytes: &[u8]) -> u64 {
+    let result_len = bytes.len();
+    let result_ptr = unsafe { allocate(result_len) };
+    if result_ptr.is_null() {
+        return 0;
     }
+
+    unsafe {
+        ptr::copy_nonoverlapping(bytes.as_ptr(), result_ptr, result_len);
+    }
+
+    ((result_ptr as u64) << 32) | (result_len as u64)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -192,18 +145,14 @@ mod tests {
 
             let (ptr, len) = unpack_ptr_len(result);
             let output = read_string(ptr, len);
-            
+
             // Check if it's an error
             let is_error = is_parse_error(ptr, len) != 0;
-            
+
             // Clean up allocated memory
             deallocate(ptr as *mut u8, len);
-            
-            if is_error {
-                Err(output)
-            } else {
-                Ok(output)
-            }
+
+            if is_error { Err(output) } else { Ok(output) }
         }
     }
 
@@ -253,20 +202,20 @@ mod tests {
         // Create a barrier to synchronize all threads to start at the same time
         let thread_count = 5; // Reduced from 10 to lower risk of resource constraints
         let barrier = Arc::new(Barrier::new(thread_count));
-        
+
         let handles: Vec<_> = (0..thread_count)
             .map(|i| {
                 let barrier = Arc::clone(&barrier);
                 thread::spawn(move || {
                     // Wait for all threads to reach this point before starting
                     barrier.wait();
-                    
+
                     let input = format!("{}+{}", i, i);
                     match safe_parse(&input) {
                         Ok(result) => {
                             assert_eq!(result, format!("{}", i + i));
                             true
-                        },
+                        }
                         Err(err) => {
                             println!("Error parsing {}: {}", input, err);
                             false

@@ -8,5 +8,13 @@
 //! Command-line interface for Secure Tunnel.
 
 fn main() {
-    println!("Welcome to Secure Tunnel CLI!");
+    let descriptor = secure_tunnel_core::example_service_descriptor();
+
+    println!("secure-tunnel-cli");
+    println!("protocol_id: {}", secure_tunnel_core::protocol_id_v1());
+    println!("preferred_carrier: quic");
+    println!(
+        "service: {}.{}",
+        descriptor.service_id, descriptor.environment_id
+    );
 }

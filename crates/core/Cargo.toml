@@ -15,6 +15,7 @@ keywords = ["secure-tunnel", "core"]
 categories = ["development-tools"]
 
 [dependencies]
+serde = { version = "1.0", features = ["derive"] }
 thiserror = "2.0"
 
 [lib]

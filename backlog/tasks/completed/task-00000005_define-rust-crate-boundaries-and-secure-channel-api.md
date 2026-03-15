@@ -47,9 +47,35 @@ The research note now points toward a transport-agnostic secure-channel core wit
 
 - backlog/tasks/task-00000009_define-udp-first-deployment-and-observability-requirements.md
 
+## Acceptance Closure
+
+- [x] A) Architecture boundaries are documented.
+  Evidence: `backlog/docs/2026-03-15_rust-crate-boundaries-and-secure-channel-api.md`
+  assigns ownership across the future secure-channel core, shared transport
+  policy, `QUIC` adapter, `WSS` adapter, and session/auth layer, and the first
+  public Rust API now exists in `crates/core/src/descriptor.rs`,
+  `crates/core/src/transport.rs`, and `crates/core/src/session.rs`.
+- [x] B) Initial implementation order is defined.
+  Evidence: the same working note maps the smallest buildable slices to tasks
+  `00000010`, `00000011`, and `00000012`, and records which crate-generation
+  changes should wait for design acceptance.
+- [x] C) Transport-first constraints are preserved.
+  Evidence: `ServiceDescriptor`, `TransportCacheSnapshot`,
+  `FallbackReason`, `SecureReadyReport`, `CloseDirective`, and the
+  transport-neutral traits in `crates/core/src/transport.rs` preserve one
+  shared security model with transport policy separated from per-carrier
+  adapters.
+
 ## Implementation Notes
 
 - This task should end with concrete architecture notes, not broad brainstorming.
 - The output should reflect the later QUIC-first research direction rather than the earlier WSS-only binding draft.
 - Treat deployment and observability requirements as an input to the API shape,
   but not as a hard blocker for defining crate boundaries.
+- Completed by writing
+  `backlog/docs/2026-03-15_rust-crate-boundaries-and-secure-channel-api.md`
+  and by replacing the placeholder core library surface with transport-neutral
+  descriptor, transport, and session modules in `crates/core/src/`.
+- Kept the existing multi-language parser scaffolds on a temporary compatibility
+  shim so this architecture task remains focused on crate seams and API shape
+  rather than binding regeneration.

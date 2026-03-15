@@ -1,5 +1,7 @@
+//! Go FFI bindings for the bootstrap Secure Tunnel scaffold.
+
+use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
-use std::ffi::{CString, CStr};
 
 use secure_tunnel_core::parse;
 
@@ -10,60 +12,61 @@ pub const VERSION: &str = "1.0.0";
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub enum ErrorCode {
+    /// Success status.
     Success = 0,
+    /// Caller supplied invalid input data.
     InvalidInput = 1,
+    /// Caller supplied a null pointer.
     NullPointer = 2,
+    /// The scaffold parser returned an error.
     ParseError = 3,
+    /// Unclassified failure.
     Unknown = 4,
 }
 
 /// Exported FFI function to parse an arithmetic expression.
-/// 
+///
 /// # Safety
-/// 
+///
 /// The caller must ensure:
 /// * input is a valid pointer to a null-terminated C string
 /// * The C string contains valid UTF-8 data
-/// 
-/// The returned string must be freed using free_rust_string().
-/// 
+///
+/// The returned string must be freed using `free_rust_string()`.
+///
 /// # Return value
-/// 
+///
 /// Returns a pointer to a null-terminated C string containing either:
 /// * The result of the calculation on success
 /// * An error message prefixed with "Error: " on failure
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn parse_expression(input: *const c_char) -> *mut c_char {
-    // Check for null pointer
     if input.is_null() {
         return CString::new("Error: null pointer provided")
             .unwrap_or_default()
             .into_raw();
     }
 
-    // Convert C string to Rust string, handle invalid UTF-8
-    let input_str = match unsafe { CStr::from_ptr(input) }.to_str() {
-        Ok(s) => s,
-        Err(_) => {
-            return CString::new("Error: invalid UTF-8 in input")
-                .unwrap_or_default()
-                .into_raw();
-        }
+    let Ok(input_str) = unsafe { CStr::from_ptr(input) }.to_str() else {
+        return CString::new("Error: invalid UTF-8 in input")
+            .unwrap_or_default()
+            .into_raw();
     };
-    
-    // Parse the expression
+
     match parse(input_str) {
         Ok(result) => CString::new(result).unwrap_or_default().into_raw(),
-        Err(e) => CString::new(format!("Error: {}", e)).unwrap_or_default().into_raw(),
+        Err(e) => CString::new(format!("Error: {e}"))
+            .unwrap_or_default()
+            .into_raw(),
     }
 }
 
-/// Helper function to free strings returned by parse_expression().
-/// 
+/// Helper function to free strings returned by `parse_expression()`.
+///
 /// # Safety
-/// 
+///
 /// The caller must ensure:
-/// * s is either null or a pointer returned by parse_expression()
+/// * s is either null or a pointer returned by `parse_expression()`
 /// * The string is not used after being freed
 /// * The string is not freed more than once
 #[unsafe(no_mangle)]
@@ -78,7 +81,6 @@ pub unsafe extern "C" fn free_rust_string(s: *mut c_char) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::ffi::CString;
 
     #[test]
     fn test_parse_expression() {
@@ -107,7 +109,7 @@ mod tests {
     fn test_invalid_utf8() {
         let bytes = [0xFF, 0, 0, 0];
         let result = unsafe {
-            let ptr = parse_expression(bytes.as_ptr() as *const c_char);
+            let ptr = parse_expression(bytes.as_ptr().cast::<c_char>());
             let output = CStr::from_ptr(ptr).to_string_lossy().into_owned();
             free_rust_string(ptr);
             output
