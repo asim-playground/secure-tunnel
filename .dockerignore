@@ -1,0 +1,10 @@
+.git
+.jj
+.mise
+.direnv
+.idea
+.DS_Store
+debug
+target
+backlog
+python/.venv

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+#MISE description="Build the Docker repro for the secure-tunnel-py cross-target link failure (defaults to expected failure)"
+set -euo pipefail
+
+platform="${SECURE_TUNNEL_REPRO_PLATFORM:-linux/amd64}"
+target="${SECURE_TUNNEL_REPRO_TARGET:-aarch64-unknown-linux-gnu}"
+action="${SECURE_TUNNEL_REPRO_ACTION:-test}"
+build_extension_module="${SECURE_TUNNEL_REPRO_BUILD_EXTENSION_MODULE:-0}"
+
+docker build \
+    --platform "$platform" \
+    --progress plain \
+    --build-arg "REPRO_TARGET=$target" \
+    --build-arg "REPRO_ACTION=$action" \
+    --build-arg "REPRO_BUILD_EXTENSION_MODULE=$build_extension_module" \
+    -f Dockerfile.ci-repro-cross-python-link \
+    .

@@ -15,7 +15,13 @@ secure-tunnel-core = { path = "../core" }
 # `abi3-py314` means the generated extension uses Python's stable ABI with
 # Python 3.14 as the minimum supported version:
 # https://pyo3.rs/main/building-and-distribution.html
-pyo3 = { version = "0.28", features = ["extension-module", "abi3-py314"] }
+#
+# PyO3 now recommends using `PYO3_BUILD_EXTENSION_MODULE` (set automatically by
+# maturin) instead of enabling the deprecated `extension-module` cargo feature
+# for all build targets. Keeping the feature always-on breaks `cargo test` and
+# cross-target workspace builds because it disables libpython linkage
+# everywhere, not just when producing the extension module artifact.
+pyo3 = { version = "0.28", features = ["abi3-py314"] }
 
 [lints]
 workspace = true

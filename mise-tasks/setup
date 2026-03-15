@@ -6,6 +6,8 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     mise run mac-setup
 fi
 
+mise run rust:ensure-components
+
 
 mise run python:setup
 
@@ -14,4 +16,3 @@ mise run python:setup
 
 
 mise run go-wasm:setup
-

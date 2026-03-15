@@ -81,7 +81,7 @@ jobs:
       - name: Run Rust workspace tests
         if: runner.os == 'Windows'
         shell: bash
-        run: cargo test --workspace
+        run: mise x -- cargo test --workspace
 
   coverage:
     name: Coverage
@@ -136,5 +136,9 @@ jobs:
         run: cargo install cross --locked
       - name: Setup environment
         run: mise run setup
-      - name: Cross compile and test
-        run: cross test --release --all-features --target ${{ matrix.target }}
+      - name: Cross compile and test portable crates
+        run: cross test --release --all-features --workspace --exclude secure-tunnel-py --target ${{ matrix.target }}
+      - name: Cross compile Python bindings
+        env:
+          PYO3_BUILD_EXTENSION_MODULE: 1
+        run: cross build --release --all-features -p secure-tunnel-py --target ${{ matrix.target }}

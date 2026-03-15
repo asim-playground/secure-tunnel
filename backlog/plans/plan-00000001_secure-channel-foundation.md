@@ -13,7 +13,7 @@ superseded_by: []
 - Status: `active`
 - Owner: `Asim Ihsan`
 - Related Plans: `none`
-- Related Tasks: `task-00000001, task-00000003, task-00000004, task-00000005, task-00000006, task-00000007, task-00000008, task-00000009, task-00000010, task-00000011, task-00000012, task-00000013, task-00000014`
+- Related Tasks: `task-00000001, task-00000003, task-00000004, task-00000005, task-00000006, task-00000007, task-00000008, task-00000009, task-00000010, task-00000011, task-00000012, task-00000013, task-00000014, task-00000015`
 
 ## Summary
 
@@ -176,6 +176,7 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 - Candidate Tasks:
     - `task-00000010` `implement framed duplex abstraction and transport selector`
     - `task-00000011` `prototype server-auth noise handshake and trust verification on transport-neutral frames`
+    - `task-00000015` `stabilize ci portability and add docker repro`
     - `task-00000012` `prototype quic-preferred transport with wss fallback and local secure session`
 - Exit Criteria:
     - [x] a local Rust path can complete the inner handshake and enter transport mode.
@@ -211,6 +212,7 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 | task-`00000009` | `define udp-first deployment and observability requirements` | `Phase 1` | `task-00000007, task-00000008` | `proposed` |
 | task-`00000010` | `implement framed duplex abstraction and transport selector` | `Phase 2` | `task-00000005, task-00000007, task-00000008` | `completed` |
 | task-`00000011` | `prototype server-auth noise handshake and trust verification on transport-neutral frames` | `Phase 2` | `task-00000005, task-00000008, task-00000010` | `completed` |
+| task-`00000015` | `stabilize ci portability and add docker repro` | `Phase 2` | `task-00000011` | `in_progress` |
 | task-`00000012` | `prototype quic-preferred transport with wss fallback and local secure session` | `Phase 2` | `task-00000005, task-00000008, task-00000009, task-00000010, task-00000011` | `proposed` |
 | task-`00000013` | `allow optional custom ca cert for intercepted wss or quic` | `Phase 3` | `task-00000009, task-00000012` | `proposed` |
 | task-`00000014` | `allow optional http proxy for wss client` | `Phase 3` | `task-00000009, task-00000012, task-00000013` | `proposed` |

@@ -1,0 +1,57 @@
+FROM debian:12-slim
+
+RUN apt-get update \
+    && apt-get -y --no-install-recommends install \
+        build-essential \
+        ca-certificates \
+        curl \
+        gcc-aarch64-linux-gnu \
+        git \
+        libc6-dev-arm64-cross \
+        pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+ENV CARGO_TERM_COLOR=always
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+ENV MISE_CACHE_DIR="/mise/cache"
+ENV MISE_CONFIG_DIR="/mise"
+ENV MISE_DATA_DIR="/mise"
+ENV MISE_INSTALL_PATH="/usr/local/bin/mise"
+ENV PATH="/mise/shims:/root/.cargo/bin:/usr/local/bin:$PATH"
+
+RUN curl https://mise.run | sh
+
+WORKDIR /work
+
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+
+ARG PYTHON_VERSION=3.14.3
+ARG RUST_VERSION=1.94.0
+ARG REPRO_TARGET=aarch64-unknown-linux-gnu
+RUN mise x "rust@${RUST_VERSION}" -- rustup target add "$REPRO_TARGET"
+
+ARG REPRO_ACTION=test
+ARG REPRO_BUILD_EXTENSION_MODULE=0
+
+# By default this reproduces the linked CI failure mode: asking Cargo to build
+# the PyO3 Rust test harness for a foreign target instead of building the
+# extension module artifact. Override the build args to validate the fixed path:
+#   --build-arg REPRO_ACTION=build
+#   --build-arg REPRO_BUILD_EXTENSION_MODULE=1
+RUN if [[ "$REPRO_BUILD_EXTENSION_MODULE" == "1" ]]; then \
+        export PYO3_BUILD_EXTENSION_MODULE=1; \
+    fi; \
+    case "$REPRO_ACTION" in \
+        test) \
+            mise x "python@${PYTHON_VERSION}" "rust@${RUST_VERSION}" -- cargo test --release --target "$REPRO_TARGET" -p secure-tunnel-py --no-run \
+            ;; \
+        build) \
+            mise x "python@${PYTHON_VERSION}" "rust@${RUST_VERSION}" -- cargo build --release --all-features -p secure-tunnel-py --target "$REPRO_TARGET" \
+            ;; \
+        *) \
+            echo "unknown REPRO_ACTION: $REPRO_ACTION" >&2; \
+            exit 1 \
+            ;; \
+    esac
