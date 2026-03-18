@@ -13,6 +13,7 @@ use crate::error::{ApiError, ApiResult};
 use crate::transport::{
     CandidateSource, CarrierKind, TransportCacheSnapshot, TransportCandidate, TransportTarget,
 };
+use crate::trust::parse_verifying_key;
 
 /// One logical descriptor with per-carrier targets.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -113,6 +114,18 @@ impl ServiceDescriptor {
     /// Returns an error when the descriptor omits required shared identity or
     /// carrier information.
     pub fn validate(&self) -> ApiResult<()> {
+        if self.descriptor_version != 1 {
+            return Err(ApiError::InvalidServiceDescriptor(
+                "descriptor_version must be 1 for v1 descriptors",
+            ));
+        }
+
+        validate_required_text("not_before", &self.not_before)?;
+        validate_required_text("not_after", &self.not_after)?;
+        validate_required_text("environment_id", &self.environment_id)?;
+        validate_required_text("service_id", &self.service_id)?;
+        validate_required_text("service_authority", &self.service_authority)?;
+
         if self.protocol_id != PROTOCOL_ID_V1 {
             return Err(ApiError::InvalidServiceDescriptor(
                 "protocol_id must match the v1 protocol identifier",
@@ -131,17 +144,24 @@ impl ServiceDescriptor {
             ));
         }
 
+        for trust_anchor in &self.trust_anchors {
+            validate_trust_anchor(trust_anchor)?;
+        }
+
         if self.selection_policy.preferred_carrier != CarrierKind::Quic {
             return Err(ApiError::InvalidServiceDescriptor(
                 "v1 requires QUIC as the preferred carrier",
             ));
         }
 
-        if self.carriers.quic.is_none() {
-            return Err(ApiError::InvalidServiceDescriptor(
+        let quic_target = self
+            .carriers
+            .quic
+            .as_ref()
+            .ok_or(ApiError::InvalidServiceDescriptor(
                 "v1 requires a QUIC carrier target",
-            ));
-        }
+            ))?;
+        validate_quic_target(quic_target)?;
 
         if self.selection_policy.allow_wss_fallback && self.carriers.wss.is_none() {
             return Err(ApiError::InvalidServiceDescriptor(
@@ -149,8 +169,110 @@ impl ServiceDescriptor {
             ));
         }
 
+        if let Some(wss_target) = &self.carriers.wss {
+            validate_wss_target(wss_target)?;
+        }
+
         Ok(())
     }
+}
+
+fn validate_required_text(field: &str, value: &str) -> ApiResult<()> {
+    if value.trim().is_empty() {
+        return Err(match field {
+            "not_before" => ApiError::InvalidServiceDescriptor("not_before must not be empty"),
+            "not_after" => ApiError::InvalidServiceDescriptor("not_after must not be empty"),
+            "environment_id" => {
+                ApiError::InvalidServiceDescriptor("environment_id must not be empty")
+            }
+            "service_id" => ApiError::InvalidServiceDescriptor("service_id must not be empty"),
+            "service_authority" => {
+                ApiError::InvalidServiceDescriptor("service_authority must not be empty")
+            }
+            _ => ApiError::InvalidServiceDescriptor("required descriptor field must not be empty"),
+        });
+    }
+    Ok(())
+}
+
+fn validate_trust_anchor(trust_anchor: &TrustAnchor) -> ApiResult<()> {
+    if trust_anchor.key_id.trim().is_empty() {
+        return Err(ApiError::InvalidServiceDescriptor(
+            "trust anchor key_id must not be empty",
+        ));
+    }
+    if trust_anchor.algorithm != "ed25519" {
+        return Err(ApiError::InvalidServiceDescriptor(
+            "trust anchor algorithm must be ed25519",
+        ));
+    }
+    if parse_verifying_key(trust_anchor).is_err() {
+        return Err(ApiError::InvalidServiceDescriptor(
+            "trust anchor public_key must be a valid Ed25519 verifying key",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_quic_target(target: &QuicTarget) -> ApiResult<()> {
+    if target.connect_host.trim().is_empty() {
+        return Err(ApiError::InvalidServiceDescriptor(
+            "QUIC connect_host must not be empty",
+        ));
+    }
+    if target.port == 0 {
+        return Err(ApiError::InvalidServiceDescriptor(
+            "QUIC port must not be zero",
+        ));
+    }
+    if target.alpn != QUIC_ALPN_V1 {
+        return Err(ApiError::InvalidServiceDescriptor(
+            "QUIC ALPN must match the v1 descriptor value",
+        ));
+    }
+    if target
+        .sni_override
+        .as_ref()
+        .is_some_and(|value| value.trim().is_empty())
+    {
+        return Err(ApiError::InvalidServiceDescriptor(
+            "QUIC sni_override must not be empty when present",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_wss_target(target: &WssTarget) -> ApiResult<()> {
+    if !wss_url_has_authority(&target.url) {
+        return Err(ApiError::InvalidServiceDescriptor(
+            "WSS target URL must use wss:// with a non-empty authority",
+        ));
+    }
+    if target.subprotocol != WSS_SUBPROTOCOL_V1 {
+        return Err(ApiError::InvalidServiceDescriptor(
+            "WSS subprotocol must match the v1 descriptor value",
+        ));
+    }
+    if target
+        .authority_override
+        .as_ref()
+        .is_some_and(|value| value.trim().is_empty())
+    {
+        return Err(ApiError::InvalidServiceDescriptor(
+            "WSS authority_override must not be empty when present",
+        ));
+    }
+    Ok(())
+}
+
+fn wss_url_has_authority(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("wss://") else {
+        return false;
+    };
+    let authority = rest.split('/').next().unwrap_or_default();
+    !authority.is_empty()
+        && !authority.starts_with(['?', '#'])
+        && !authority.chars().any(char::is_whitespace)
 }
 
 fn put_prologue_field(buffer: &mut Vec<u8>, value: &str) -> ApiResult<()> {
@@ -236,13 +358,13 @@ fn plan_for_live_attempt(
             CandidateSource::PreferredCarrier
         },
     });
-    if policy.allow_wss_fallback {
-        if let Some(wss) = wss_target {
-            plan.push(TransportCandidate {
-                target: TransportTarget::Wss(wss),
-                source: CandidateSource::FallbackCarrier,
-            });
-        }
+    if policy.allow_wss_fallback
+        && let Some(wss) = wss_target
+    {
+        plan.push(TransportCandidate {
+            target: TransportTarget::Wss(wss),
+            source: CandidateSource::FallbackCarrier,
+        });
     }
     plan
 }
@@ -263,7 +385,7 @@ pub fn example_service_descriptor() -> ServiceDescriptor {
         trust_anchors: vec![TrustAnchor {
             key_id: "root-2026-01".to_owned(),
             algorithm: "ed25519".to_owned(),
-            public_key: "<base64>".to_owned(),
+            public_key: "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=".to_owned(),
         }],
         selection_policy: SelectionPolicy {
             preferred_carrier: CarrierKind::Quic,
@@ -282,121 +404,5 @@ pub fn example_service_descriptor() -> ServiceDescriptor {
                 authority_override: None,
             }),
         },
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{CandidateSource, CarrierKind, TransportCacheSnapshot, example_service_descriptor};
-    use crate::{ApiError, FallbackReason};
-
-    #[test]
-    fn connect_plan_prefers_quic_on_unknown_network() {
-        let descriptor = example_service_descriptor();
-
-        let plan = descriptor.connect_plan(None, 1_742_000_000).unwrap();
-
-        assert_eq!(plan.len(), 2);
-        assert_eq!(plan[0].target.carrier(), CarrierKind::Quic);
-        assert_eq!(plan[0].source, CandidateSource::PreferredCarrier);
-        assert_eq!(plan[1].target.carrier(), CarrierKind::Wss);
-        assert_eq!(plan[1].source, CandidateSource::FallbackCarrier);
-    }
-
-    #[test]
-    fn connect_plan_uses_only_wss_when_quic_bad_cache_is_active() {
-        let descriptor = example_service_descriptor();
-        let cache = TransportCacheSnapshot {
-            last_successful_carrier: Some(CarrierKind::Wss),
-            last_quic_failure: Some(FallbackReason::OuterPathFailure),
-            next_quic_probe_after_unix_seconds: Some(2_000),
-        };
-
-        let plan = descriptor.connect_plan(Some(&cache), 1_999).unwrap();
-
-        assert_eq!(plan.len(), 1);
-        assert_eq!(plan[0].target.carrier(), CarrierKind::Wss);
-        assert_eq!(plan[0].source, CandidateSource::CachedQuicBadNetwork);
-    }
-
-    #[test]
-    fn connect_plan_fails_fast_when_cache_blocks_quic_and_fallback_is_disabled() {
-        let mut descriptor = example_service_descriptor();
-        descriptor.selection_policy.allow_wss_fallback = false;
-        descriptor.carriers.wss = None;
-        let cache = TransportCacheSnapshot {
-            last_successful_carrier: None,
-            last_quic_failure: Some(FallbackReason::OuterPathFailure),
-            next_quic_probe_after_unix_seconds: Some(2_000),
-        };
-
-        let error = descriptor.connect_plan(Some(&cache), 1_999).unwrap_err();
-
-        assert_eq!(
-            error,
-            ApiError::TransportPlanBlocked(
-                "cached QUIC-bad posture requires WSS fallback or cache expiry"
-            )
-        );
-    }
-
-    #[test]
-    fn connect_plan_reprobes_quic_after_cache_deadline() {
-        let descriptor = example_service_descriptor();
-        let cache = TransportCacheSnapshot {
-            last_successful_carrier: Some(CarrierKind::Wss),
-            last_quic_failure: Some(FallbackReason::OuterPathFailure),
-            next_quic_probe_after_unix_seconds: Some(2_000),
-        };
-
-        let plan = descriptor.connect_plan(Some(&cache), 2_000).unwrap();
-
-        assert_eq!(plan[0].target.carrier(), CarrierKind::Quic);
-        assert_eq!(
-            plan[0].source,
-            CandidateSource::QuicReprobeAfterCachedFallback
-        );
-    }
-
-    #[test]
-    fn validate_requires_wss_target_when_fallback_enabled() {
-        let mut descriptor = example_service_descriptor();
-        descriptor.carriers.wss = None;
-
-        let error = descriptor.validate().unwrap_err();
-
-        assert_eq!(
-            error,
-            ApiError::InvalidServiceDescriptor("allow_wss_fallback requires a WSS carrier target")
-        );
-    }
-
-    #[test]
-    fn validate_requires_quic_as_preferred_carrier() {
-        let mut descriptor = example_service_descriptor();
-        descriptor.selection_policy.preferred_carrier = CarrierKind::Wss;
-
-        let error = descriptor.validate().unwrap_err();
-
-        assert_eq!(
-            error,
-            ApiError::InvalidServiceDescriptor("v1 requires QUIC as the preferred carrier")
-        );
-    }
-
-    #[test]
-    fn noise_prologue_uses_canonical_field_order_and_length_prefixes() {
-        let descriptor = example_service_descriptor();
-
-        let prologue = descriptor.noise_prologue().unwrap();
-        let expected = [
-            0x00, 0x10, b's', b'e', b'c', b'u', b'r', b'e', b'-', b't', b'u', b'n', b'n', b'e',
-            b'l', b'-', b'v', b'1', 0x00, 0x04, b'p', b'r', b'o', b'd', 0x00, 0x11, b's', b'e',
-            b'c', b'u', b'r', b'e', b'-', b't', b'u', b'n', b'n', b'e', b'l', b'-', b'a', b'p',
-            b'i', 0x00, 0x0f, b'a', b'p', b'i', b'.', b'e', b'x', b'a', b'm', b'p', b'l', b'e',
-            b'.', b'c', b'o', b'm',
-        ];
-
-        assert_eq!(prologue, expected);
     }
 }

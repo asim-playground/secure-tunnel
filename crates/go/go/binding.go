@@ -5,12 +5,12 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-// Package binding provides Go bindings for the test-project arithmetic expression parser.
+// Package binding provides Go bindings for the Secure Tunnel C ABI.
 package binding
 
 /*
 #cgo CFLAGS: -I${SRCDIR}/..
-#cgo LDFLAGS: -L${SRCDIR}/../../../target/debug -lsecure_tunnel_go
+#cgo LDFLAGS: -lsecure_tunnel_ffi
 
 #include "binding.h"
 #include <stdlib.h>
@@ -20,135 +20,100 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"runtime"
 	"strings"
-	"sync"
 	"unsafe"
 )
 
 // Version of the binding package
 const Version = "1.0.0"
 
-// Expression represents a parsed arithmetic expression
-type Expression struct {
-	// Result contains the computed value
-	Result string
-	// Raw contains the original expression
-	Raw string
+// ABIError represents an error returned by the Secure Tunnel C ABI.
+type ABIError struct {
+	Status int32
+	msg    string
 }
 
-// String returns a string representation of the expression
-func (e *Expression) String() string {
-	return fmt.Sprintf("%s = %s", e.Raw, e.Result)
+func (e *ABIError) Error() string {
+	return fmt.Sprintf("secure tunnel ABI status %d: %s", e.Status, e.msg)
 }
 
-// ParseError represents an error that occurred during parsing
-type ParseError struct {
-	msg string
+// ProtocolID returns the v1 Secure Tunnel protocol identifier.
+func ProtocolID() string {
+	return C.GoString(C.secure_tunnel_protocol_id_v1())
 }
 
-func (e *ParseError) Error() string {
-	return e.msg
+// QuicALPN returns the v1 QUIC ALPN value.
+func QuicALPN() string {
+	return C.GoString(C.secure_tunnel_quic_alpn_v1())
 }
 
-// Parse parses an arithmetic expression with context support.
-// It returns an Expression containing both the original input and the computed result.
-// The context can be used to cancel long-running operations.
-func Parse(ctx context.Context, input string) (*Expression, error) {
-	// Check context before proceeding
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
+// WSSSubprotocol returns the v1 WebSocket subprotocol value.
+func WSSSubprotocol() string {
+	return C.GoString(C.secure_tunnel_wss_subprotocol_v1())
+}
+
+// ExampleServiceDescriptorJSON returns a sample descriptor JSON document.
+func ExampleServiceDescriptorJSON(ctx context.Context) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	return unwrapStringResult(C.secure_tunnel_example_service_descriptor_json())
+}
+
+// ValidateServiceDescriptorJSON validates a descriptor JSON document.
+func ValidateServiceDescriptorJSON(ctx context.Context, descriptorJSON string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if strings.ContainsRune(descriptorJSON, '\x00') {
+		return errors.New("descriptor JSON contains NUL byte")
 	}
 
-	if strings.ContainsRune(input, '\x00') {
-		return nil, errors.New("input contains NUL byte")
-	}
+	cJSON := C.CString(descriptorJSON)
+	defer C.free(unsafe.Pointer(cJSON))
 
-	// Convert input to C string
-	cInput := C.CString(input)
-	defer C.free(unsafe.Pointer(cInput))
-
-	// Call Rust function
-	cResult := C.parse_expression(cInput)
-	if cResult == nil {
-		return nil, &ParseError{msg: "null pointer returned from parser"}
-	}
-	
-	// Ensure the result is freed
-	defer C.free_rust_string(cResult)
-
-	// Convert result back to Go string
-	result := C.GoString(cResult)
-
-	// Check for error prefix
-	if len(result) > 6 && result[:6] == "Error:" {
-		return nil, &ParseError{msg: result[7:]}
-	}
-
-	// Return successful result
-	return &Expression{
-		Result: result,
-		Raw:    input,
-	}, nil
+	_, err := unwrapStringResult(C.secure_tunnel_validate_service_descriptor_json(cJSON))
+	return err
 }
 
-// MustParse is like Parse but panics on error.
-// It's useful for expressions that are known to be valid.
-func MustParse(input string) *Expression {
-	expr, err := Parse(context.Background(), input)
+// NormalizeServiceDescriptorJSON validates and re-encodes a descriptor JSON document.
+func NormalizeServiceDescriptorJSON(ctx context.Context, descriptorJSON string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	if strings.ContainsRune(descriptorJSON, '\x00') {
+		return "", errors.New("descriptor JSON contains NUL byte")
+	}
+
+	cJSON := C.CString(descriptorJSON)
+	defer C.free(unsafe.Pointer(cJSON))
+
+	return unwrapStringResult(C.secure_tunnel_normalize_service_descriptor_json(cJSON))
+}
+
+// MustExampleServiceDescriptorJSON is like ExampleServiceDescriptorJSON but panics on error.
+func MustExampleServiceDescriptorJSON() string {
+	json, err := ExampleServiceDescriptorJSON(context.Background())
 	if err != nil {
 		panic(err)
 	}
-	return expr
+	return json
 }
 
-// ParseConcurrent parses multiple expressions concurrently.
-// It returns a slice of results in the same order as the inputs.
-// If any parse fails, it returns an error and any successfully parsed expressions.
-func ParseConcurrent(ctx context.Context, inputs []string) ([]*Expression, error) {
-	var (
-		wg      sync.WaitGroup
-		mu      sync.Mutex
-		results = make([]*Expression, len(inputs))
-		errs    = make([]error, len(inputs))
-	)
-
-	// Process each input concurrently
-	for i, input := range inputs {
-		wg.Add(1)
-		go func(idx int, expr string) {
-			defer wg.Done()
-			result, err := Parse(ctx, expr)
-			mu.Lock()
-			results[idx] = result
-			errs[idx] = err
-			mu.Unlock()
-		}(i, input)
+func unwrapStringResult(result C.SecureTunnelStringResult) (string, error) {
+	var value string
+	if result.value != nil {
+		value = C.GoString(result.value)
+		C.secure_tunnel_free_string(result.value)
 	}
 
-	// Wait for all goroutines to complete
-	wg.Wait()
-
-	// Check for errors
-	var errMsgs []string
-	for i, err := range errs {
-		if err != nil {
-			errMsgs = append(errMsgs, fmt.Sprintf("input %d: %v", i, err))
+	status := int32(result.status)
+	if status != 0 {
+		if value == "" {
+			value = "no message returned"
 		}
+		return "", &ABIError{Status: status, msg: value}
 	}
 
-	if len(errMsgs) > 0 {
-		return results, &ParseError{msg: fmt.Sprintf("multiple parse errors: %v", errMsgs)}
-	}
-
-	return results, nil
-}
-
-// init registers a finalizer for the package to ensure cleanup
-func init() {
-	runtime.SetFinalizer(&struct{}{}, func(interface{}) {
-		// Any cleanup needed when the package is unloaded
-	})
+	return value, nil
 }

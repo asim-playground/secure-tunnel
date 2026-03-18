@@ -43,6 +43,21 @@ an explicit Docker-based path.
   repository root.
 - The repro path is documented in task notes and is easy to invoke locally.
 
+## Acceptance Closure
+
+- [x] A) `CI` no longer fails for the three observed portability issues.
+  - Evidence: added `mise-tasks/rust/ensure-components` and wired it into
+    `mise-tasks/setup` so required Rust components install before lint/test
+    steps; updated `mise-tasks/python/setup` to resolve Python via
+    `sys.executable`; and switched Windows tests to `mise x -- cargo test
+    --workspace` under the pinned toolchain.
+- [x] B) The linked cross-compile failure has a checked-in local repro.
+  - Evidence: added `Dockerfile.ci-repro-cross-python-link`,
+    `.dockerignore`, and `mise-tasks/repro/ci-cross-python-link`; removed
+    always-on `pyo3/extension-module` from `crates/python/Cargo.toml` and
+    moved extension-module building to an explicit `PYO3_BUILD_EXTENSION_MODULE`
+    path compatible with cross-target workflows.
+
 ## Task Dependencies
 
 - `task-00000011`

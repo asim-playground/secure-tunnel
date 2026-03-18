@@ -2,20 +2,26 @@
 
 __version__: str
 
-def parse(expression: str) -> str:
-    """Parse and evaluate a simple arithmetic expression.
+def protocol_id_v1() -> str:
+    """Return the stable v1 protocol identifier."""
+    ...
 
-    Args:
-        expression: The arithmetic expression to evaluate (e.g., "1+2+3")
+def quic_alpn_v1() -> str:
+    """Return the v1 QUIC ALPN value."""
+    ...
 
-    Returns:
-        The result of evaluating the expression
+def wss_subprotocol_v1() -> str:
+    """Return the v1 WSS subprotocol value."""
+    ...
 
-    Raises:
-        ValueError: If the expression cannot be parsed
+def example_service_descriptor_json() -> str:
+    """Return a sample service descriptor as JSON."""
+    ...
 
-    Example:
-        >>> parse("1+2+3")
-        '6'
-    """
+def validate_service_descriptor_json(descriptor_json: str) -> None:
+    """Validate a service descriptor JSON document."""
+    ...
+
+def normalize_service_descriptor_json(descriptor_json: str) -> str:
+    """Validate and re-encode a service descriptor JSON document."""
     ...

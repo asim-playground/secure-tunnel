@@ -5,7 +5,7 @@ set -euo pipefail
 TARGET_DIR=$(cargo metadata --format-version=1 --no-deps | jq -r '.target_directory')
 DEBUG_DIR="$TARGET_DIR/debug"
 
-export CGO_LDFLAGS="-L${DEBUG_DIR} -lsecure_tunnel_go"
+export CGO_LDFLAGS="-L${DEBUG_DIR}"
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
     SDK_PATH="$(xcrun --show-sdk-path)"

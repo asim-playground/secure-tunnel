@@ -1,6 +1,6 @@
 # Language configuration
 language = "C"
-include_guard = "SECURE_TUNNEL_H"
+include_guard = "SECURE_TUNNEL_FFI_H"
 style = "both"
 cpp_compat = true
 
@@ -17,5 +17,4 @@ tab_width = 4
 "target_os = linux" = "LINUX"
 
 [export]
-include = ["ParseError"]
-prefix = "secure_tunnel_"
+include = ["SecureTunnelStatus", "SecureTunnelStringResult"]

@@ -25,7 +25,8 @@ Secure Tunnel is a multi-platform Rust project with:
 - 🦀 **Core Library**: Shared functionality in `secure-tunnel-core`
 - 🖥️ **CLI Tool**: Command-line interface in `secure-tunnel-cli`
 - 🐍 **Python Bindings**: Native Python extension module
-- 🦫 **Go Bindings**: CGO-based Go library bindings
+- 🔗 **C/Swift ABI**: C-compatible FFI library and generated header
+- 🦫 **Go Bindings**: CGO-based Go library bindings over the C ABI
 
 ## Quick Start
 
@@ -83,7 +84,7 @@ secure-tunnel/
 ├── crates/
 │   ├── core/       # Core library (secure-tunnel-core)
 │   ├── cli/        # Command-line tool (secure-tunnel-cli)
-│   ├── go/         # Rust cdylib for Go bindings
+│   ├── go/         # C ABI plus Go bindings
 │   └── go-wasm/    # Rust crate for Go/WASI workflow
 ├── crates/python/  # Rust extension crate for Python bindings
 ├── python/         # Pure-Python packaging, tests, and pyproject metadata
@@ -91,6 +92,20 @@ secure-tunnel/
 ├── scripts/        # Helper scripts used by setup
 └── mise.toml       # Toolchain pins and task aliases
 ```
+
+### Swift And C ABI
+
+The FFI crate emits `libsecure_tunnel_ffi` plus a generated C header at
+`crates/go/binding.h`. Swift callers can import that header through the module
+map in `crates/go/module.modulemap` and use the descriptor/protocol helpers:
+
+- `secure_tunnel_protocol_id_v1`
+- `secure_tunnel_example_service_descriptor_json`
+- `secure_tunnel_validate_service_descriptor_json`
+- `secure_tunnel_normalize_service_descriptor_json`
+
+Strings returned through `SecureTunnelStringResult.value` are caller-owned and
+must be released with `secure_tunnel_free_string`.
 
 ## Contributing
 

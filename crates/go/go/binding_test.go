@@ -9,168 +9,114 @@ package binding
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 )
 
-func TestParse(t *testing.T) {
-	tests := []struct {
-		name    string
-		input   string
-		want    string
-		wantErr bool
-	}{
-		{
-			name:    "valid expression",
-			input:   "1 + 2",
-			want:    "3",
-			wantErr: false,
-		},
-		{
-			name:    "empty input",
-			input:   "",
-			wantErr: true,
-		},
-		{
-			name:    "complex expression",
-			input:   "10 + 20 + 30",
-			want:    "60",
-			wantErr: false,
-		},
-		{
-			name:    "overflow expression",
-			input:   "9223372036854775807+1",
-			wantErr: true,
-		},
+func TestProtocolConstants(t *testing.T) {
+	if got := ProtocolID(); got != "secure-tunnel-v1" {
+		t.Fatalf("ProtocolID() = %q", got)
 	}
-
-	ctx := context.Background()
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := Parse(ctx, tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Parse() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !tt.wantErr && got.Result != tt.want {
-				t.Errorf("Parse() = %v, want %v", got.Result, tt.want)
-			}
-		})
+	if got := QuicALPN(); got != "secure-tunnel-v1" {
+		t.Fatalf("QuicALPN() = %q", got)
+	}
+	if got := WSSSubprotocol(); got != "secure-tunnel-v1" {
+		t.Fatalf("WSSSubprotocol() = %q", got)
 	}
 }
 
-func TestParseError(t *testing.T) {
+func TestExampleDescriptorValidates(t *testing.T) {
 	ctx := context.Background()
-	input := "invalid expression"
-	_, err := Parse(ctx, input)
+	descriptor, err := ExampleServiceDescriptorJSON(ctx)
+	if err != nil {
+		t.Fatalf("ExampleServiceDescriptorJSON() error = %v", err)
+	}
+	if !strings.Contains(descriptor, `"service_id":"secure-tunnel-api"`) {
+		t.Fatalf("example descriptor missing service id: %s", descriptor)
+	}
+
+	if err := ValidateServiceDescriptorJSON(ctx, descriptor); err != nil {
+		t.Fatalf("ValidateServiceDescriptorJSON() error = %v", err)
+	}
+}
+
+func TestNormalizeDescriptorRejectsInvalidProtocol(t *testing.T) {
+	ctx := context.Background()
+	descriptor := strings.Replace(
+		MustExampleServiceDescriptorJSON(),
+		`"protocol_id":"secure-tunnel-v1"`,
+		`"protocol_id":"wrong"`,
+		1,
+	)
+
+	_, err := NormalizeServiceDescriptorJSON(ctx, descriptor)
 	if err == nil {
-		t.Fatal("expected error, got nil")
+		t.Fatal("expected invalid descriptor error")
+	}
+	var abiErr *ABIError
+	if !strings.Contains(err.Error(), "protocol_id") || !strings.Contains(err.Error(), "status 4") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ok := errors.As(err, &abiErr); !ok {
+		t.Fatalf("expected ABIError, got %T", err)
+	}
+	if abiErr.Status != 4 {
+		t.Fatalf("ABIError status = %d, want 4", abiErr.Status)
 	}
 }
 
-func TestParseRejectsEmbeddedNUL(t *testing.T) {
+func TestValidateDescriptorRejectsInvalidWSSSubprotocol(t *testing.T) {
 	ctx := context.Background()
-	_, err := Parse(ctx, "1\x00+2")
+	descriptor := strings.Replace(
+		MustExampleServiceDescriptorJSON(),
+		`"subprotocol":"secure-tunnel-v1"`,
+		`"subprotocol":"wrong"`,
+		1,
+	)
+
+	err := ValidateServiceDescriptorJSON(ctx, descriptor)
+	if err == nil {
+		t.Fatal("expected invalid descriptor error")
+	}
+	if !strings.Contains(err.Error(), "WSS subprotocol") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateRejectsEmbeddedNUL(t *testing.T) {
+	err := ValidateServiceDescriptorJSON(context.Background(), "x\x00y")
 	if err == nil {
 		t.Fatal("expected embedded NUL input to fail")
 	}
 }
 
-func TestParseLongInput(t *testing.T) {
-	ctx := context.Background()
-	// Test with a long expression to ensure memory handling
-	longExpr := strings.Repeat("1 + ", 100) + "1"
-	_, err := Parse(ctx, longExpr)
-	if err != nil {
-		t.Errorf("Parse() failed with long input: %v", err)
+func TestContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if _, err := ExampleServiceDescriptorJSON(ctx); err == nil {
+		t.Fatal("expected cancelled context to fail")
 	}
 }
 
-func TestParseContext(t *testing.T) {
-	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-
-	// Start a parse operation
-	_, err := Parse(ctx, "1 + 2")
-	if err != nil {
-		t.Errorf("Parse() failed with context: %v", err)
-	}
-
-	// Test with cancelled context
-	cancelCtx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel immediately
-	_, err = Parse(cancelCtx, "1 + 2")
-	if err == nil {
-		t.Error("Parse() should fail with cancelled context")
-	}
-}
-
-func TestParseConcurrent(t *testing.T) {
+func TestConcurrentValidation(t *testing.T) {
 	ctx := context.Background()
-	inputs := []string{
-		"1 + 2",
-		"10 + 20",
-		"100 + 200",
-	}
+	descriptor := MustExampleServiceDescriptorJSON()
 
-	results, err := ParseConcurrent(ctx, inputs)
-	if err != nil {
-		t.Fatalf("ParseConcurrent() error = %v", err)
-	}
-
-	expected := []string{"3", "30", "300"}
-	for i, result := range results {
-		if result.Result != expected[i] {
-			t.Errorf("ParseConcurrent() result[%d] = %v, want %v", i, result.Result, expected[i])
-		}
-	}
-}
-
-func TestConcurrentSafety(t *testing.T) {
-	ctx := context.Background()
-	const goroutines = 100
+	const goroutines = 50
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
 
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() {
 			defer wg.Done()
-			_, err := Parse(ctx, "1 + 2")
-			if err != nil {
-				t.Errorf("concurrent Parse() failed: %v", err)
+			if err := ValidateServiceDescriptorJSON(ctx, descriptor); err != nil {
+				t.Errorf("concurrent validation failed: %v", err)
 			}
 		}()
 	}
 
 	wg.Wait()
-}
-
-func TestMustParse(t *testing.T) {
-	// Test valid expression
-	expr := MustParse("1 + 2")
-	if expr.Result != "3" {
-		t.Errorf("MustParse() = %v, want 3", expr.Result)
-	}
-
-	// Test panic on invalid expression
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("MustParse() should panic on invalid input")
-		}
-	}()
-	MustParse("invalid")
-}
-
-func TestExpressionString(t *testing.T) {
-	expr := &Expression{
-		Raw:    "1 + 2",
-		Result: "3",
-	}
-	expected := "1 + 2 = 3"
-	if got := expr.String(); got != expected {
-		t.Errorf("Expression.String() = %v, want %v", got, expected)
-	}
 }

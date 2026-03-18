@@ -144,7 +144,7 @@ pub fn verify_server_key_authorization(
         .map_err(|_| ApiError::InnerTrustFailure)
 }
 
-fn parse_verifying_key(anchor: &TrustAnchor) -> Result<VerifyingKey, CodecError> {
+pub fn parse_verifying_key(anchor: &TrustAnchor) -> Result<VerifyingKey, CodecError> {
     if anchor.algorithm != "ed25519" {
         return Err(CodecError::InvalidUtf8);
     }

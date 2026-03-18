@@ -13,13 +13,13 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/tetratelabs/wazero"
+	"github.com/tetratelabs/wazero/api"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
 )
 
@@ -27,285 +27,83 @@ import (
 const Version = "1.0.0"
 
 var (
-	// Global runtime instance
 	runtimeOnce sync.Once
 	runtime     wazero.Runtime
-	runtimeMutex sync.RWMutex
+	runtimeMu   sync.RWMutex
 
-	// Pre-compiled module to be instantiated for each request
 	compiledModuleOnce sync.Once
 	compiledModule     wazero.CompiledModule
 	compiledModuleErr  error
 
-	// Counter for generating unique module names
 	moduleNameCounter uint64
 
 	//go:embed secure_tunnel_go_wasm.wasm
 	wasmBytes []byte
 )
 
-// Expression represents a parsed arithmetic expression
-type Expression struct {
-	// Result contains the computed value
-	Result string
-	// Raw contains the original expression
-	Raw string
-}
-
-// String returns a string representation of the expression
-func (e *Expression) String() string {
-	return fmt.Sprintf("%s = %s", e.Raw, e.Result)
-}
-
-// ParseError represents an error that occurred during parsing
-type ParseError struct {
+// ABIError represents an error returned by the WASM ABI.
+type ABIError struct {
 	msg string
 }
 
-func (e *ParseError) Error() string {
+func (e *ABIError) Error() string {
 	return e.msg
 }
 
-// Helper function to unpack a pointer/length pair from a u64
-func unpackPtrLen(packed uint64) (uint32, uint32) {
-	ptr := uint32(packed >> 32)
-	len := uint32(packed & 0xFFFFFFFF)
-	return ptr, len
+// ProtocolID returns the v1 Secure Tunnel protocol identifier.
+func ProtocolID(ctx context.Context) (string, error) {
+	return callStringExport(ctx, "protocol_id_v1")
 }
 
-// Helper to get a unique module name
-func getUniqueModuleName() string {
-	return fmt.Sprintf("secure_tunnel_go_wasm_%d", atomic.AddUint64(&moduleNameCounter, 1))
+// QuicALPN returns the v1 QUIC ALPN value.
+func QuicALPN(ctx context.Context) (string, error) {
+	return callStringExport(ctx, "quic_alpn_v1")
 }
 
-// Initialize the WASM runtime and compile the module.
-// One-time setup must not depend on request-scoped contexts, or an early
-// cancellation can poison all later calls via sync.Once.
-func initRuntime() (wazero.Runtime, wazero.CompiledModule, error) {
-	initCtx := context.Background()
-
-	// Initialize the runtime
-	var rt wazero.Runtime
-	runtimeOnce.Do(func() {
-		runtime = wazero.NewRuntime(initCtx)
-		// Instantiate WASI
-		wasi_snapshot_preview1.MustInstantiate(initCtx, runtime)
-	})
-
-	// Must acquire read lock to access runtime
-	runtimeMutex.RLock()
-	rt = runtime
-	runtimeMutex.RUnlock()
-	
-	if rt == nil {
-		return nil, nil, errors.New("failed to initialize runtime")
-	}
-
-	// Pre-compile the module (once)
-	compiledModuleOnce.Do(func() {
-		compiledModule, compiledModuleErr = rt.CompileModule(initCtx, wasmBytes)
-	})
-
-	return rt, compiledModule, compiledModuleErr
+// WSSSubprotocol returns the v1 WebSocket subprotocol value.
+func WSSSubprotocol(ctx context.Context) (string, error) {
+	return callStringExport(ctx, "wss_subprotocol_v1")
 }
 
-// Parse parses an arithmetic expression with context support.
-// It returns an Expression containing both the original input and the computed result.
-// The context can be used to cancel long-running operations.
-func Parse(ctx context.Context, input string) (*Expression, error) {
-	// Check context before proceeding
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
-
-	// Initialize the runtime and get compiled module
-	rt, compiled, err := initRuntime()
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize runtime: %w", err)
-	}
-
-	// Each parse operation gets its own module instance with a unique name
-	// This prevents name collisions and race conditions
-	moduleConfig := wazero.NewModuleConfig().
-		WithName(getUniqueModuleName()).
-		WithArgs("secure_tunnel_go_wasm").  // Program name for WASI
-		WithSysWalltime().           // Enable access to wall time
-		WithSysNanotime().           // Enable access to monotonic time
-		WithRandSource(rand.Reader)  // Use crypto/rand as random source
-
-	// Create a new module instance for this operation
-	module, err := rt.InstantiateModule(ctx, compiled, moduleConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to instantiate WASM module: %w", err)
-	}
-	defer func() {
-		if closeErr := module.Close(ctx); closeErr != nil {
-			// Log cleanup error - this shouldn't normally happen but good to know if it does
-			log.Printf("warning: failed to close WASM module: %v\n", closeErr)
-		}
-	}()
-
-	// Get the needed export functions
-	allocate := module.ExportedFunction("allocate")
-	deallocate := module.ExportedFunction("deallocate")
-	parseExpr := module.ExportedFunction("parse_expression")
-	isParseError := module.ExportedFunction("is_parse_error")
-
-	if allocate == nil || deallocate == nil || parseExpr == nil || isParseError == nil {
-		return nil, errors.New("required functions not exported from WASM module")
-	}
-
-	// Allocate memory for the input
-	inputBytes := []byte(input)
-	inputLen := uint64(len(inputBytes))
-
-	allocResults, err := allocate.Call(ctx, inputLen)
-	if err != nil {
-		return nil, fmt.Errorf("failed to allocate memory: %w", err)
-	}
-	inputPtr := allocResults[0]
-
-	// Make sure we deallocate the input memory when we're done
-	defer deallocate.Call(ctx, inputPtr, inputLen) //nolint:errcheck
-
-	// Copy the input into WASM memory
-	if !module.Memory().Write(uint32(inputPtr), inputBytes) {
-		return nil, errors.New("failed to write to WASM memory")
-	}
-
-	// Call the parse_expression function
-	results, err := parseExpr.Call(ctx, inputPtr, inputLen)
-	if err != nil {
-		return nil, fmt.Errorf("failed to call parse_expression: %w", err)
-	}
-
-	// Unpack the result (ptr in high 32 bits, len in low 32 bits)
-	packed := results[0]
-	if packed == 0 {
-		return nil, errors.New("allocation error in WASM module")
-	}
-
-	resultPtr, resultLen := unpackPtrLen(packed)
-
-	// Make sure we deallocate the result memory when we're done
-	defer deallocate.Call(ctx, uint64(resultPtr), uint64(resultLen)) //nolint:errcheck
-
-	// Check if the result is an error
-	errorCheckResults, err := isParseError.Call(ctx, uint64(resultPtr), uint64(resultLen))
-	if err != nil {
-		return nil, fmt.Errorf("failed to check if result is error: %w", err)
-	}
-
-	// Read the result from memory
-	resultBytes, ok := module.Memory().Read(resultPtr, resultLen)
-	if !ok {
-		return nil, errors.New("failed to read result from WASM memory")
-	}
-
-	resultStr := string(resultBytes)
-
-	// If it's an error, return it
-	if errorCheckResults[0] != 0 {
-		return nil, &ParseError{msg: strings.TrimPrefix(resultStr, "Error: ")}
-	}
-
-	// Return successful result
-	return &Expression{
-		Result: resultStr,
-		Raw:    input,
-	}, nil
+// ExampleServiceDescriptorJSON returns a sample descriptor JSON document.
+func ExampleServiceDescriptorJSON(ctx context.Context) (string, error) {
+	return callStringExport(ctx, "example_service_descriptor_json")
 }
 
-// MustParse is like Parse but panics on error.
-// It's useful for expressions that are known to be valid.
-func MustParse(input string) *Expression {
-	expr, err := Parse(context.Background(), input)
+// ValidateServiceDescriptorJSON validates a descriptor JSON document.
+func ValidateServiceDescriptorJSON(ctx context.Context, descriptorJSON string) error {
+	if strings.ContainsRune(descriptorJSON, '\x00') {
+		return errors.New("descriptor JSON contains NUL byte")
+	}
+	_, err := callStringExportWithInput(ctx, "validate_service_descriptor_json", descriptorJSON)
+	return err
+}
+
+// NormalizeServiceDescriptorJSON validates and re-encodes a descriptor JSON document.
+func NormalizeServiceDescriptorJSON(ctx context.Context, descriptorJSON string) (string, error) {
+	if strings.ContainsRune(descriptorJSON, '\x00') {
+		return "", errors.New("descriptor JSON contains NUL byte")
+	}
+	return callStringExportWithInput(ctx, "normalize_service_descriptor_json", descriptorJSON)
+}
+
+// MustExampleServiceDescriptorJSON is like ExampleServiceDescriptorJSON but panics on error.
+func MustExampleServiceDescriptorJSON() string {
+	descriptor, err := ExampleServiceDescriptorJSON(context.Background())
 	if err != nil {
 		panic(err)
 	}
-	return expr
-}
-
-// ParseConcurrent parses multiple expressions concurrently.
-// It returns a slice of results in the same order as the inputs.
-// If any parse fails, it returns an error and any successfully parsed expressions.
-func ParseConcurrent(ctx context.Context, inputs []string) ([]*Expression, error) {
-	var (
-		wg      sync.WaitGroup
-		mu      sync.Mutex
-		results = make([]*Expression, len(inputs))
-		errs    = make([]error, len(inputs))
-	)
-
-	// No semaphore or lock needed for Parse operations since each gets its own module instance
-	for i, input := range inputs {
-		wg.Add(1)
-		go func(idx int, expr string) {
-			defer wg.Done()
-
-			result, err := Parse(ctx, expr)
-			mu.Lock()
-			results[idx] = result
-			errs[idx] = err
-			mu.Unlock()
-		}(i, input)
-	}
-
-	// Wait for all goroutines to complete
-	wg.Wait()
-
-	// Check for errors
-	var errMsgs []string
-	for i, err := range errs {
-		if err != nil {
-			errMsgs = append(errMsgs, fmt.Sprintf("input %d: %v", i, err))
-		}
-	}
-
-	if len(errMsgs) > 0 {
-		return results, &ParseError{msg: fmt.Sprintf("multiple parse errors: %v", errMsgs)}
-	}
-
-	return results, nil
+	return descriptor
 }
 
 // GetWasmTimestamp returns the current timestamp as reported by the WASM module.
-// This demonstrates calling a WASI-enabled function from the WASM module.
 func GetWasmTimestamp(ctx context.Context) (time.Time, error) {
-	select {
-	case <-ctx.Done():
-		return time.Time{}, ctx.Err()
-	default:
-	}
-
-	// Initialize the runtime and get compiled module
-	rt, compiled, err := initRuntime()
+	module, err := instantiateModule(ctx)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to initialize runtime: %w", err)
+		return time.Time{}, err
 	}
+	defer module.Close(ctx) //nolint:errcheck
 
-	// Create a new module instance for this operation with a unique name
-	moduleConfig := wazero.NewModuleConfig().
-		WithName(getUniqueModuleName()).
-		WithArgs("secure_tunnel_go_wasm").
-		WithSysWalltime().
-		WithSysNanotime().
-		WithRandSource(rand.Reader)
-
-	module, err := rt.InstantiateModule(ctx, compiled, moduleConfig)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to instantiate WASM module: %w", err)
-	}
-	defer func() {
-		if closeErr := module.Close(ctx); closeErr != nil {
-			// Log cleanup error - this shouldn't normally happen but good to know if it does
-			log.Printf("warning: failed to close WASM module: %v\n", closeErr)
-		}
-	}()
-
-	// Call the get_timestamp_ms function
 	getTimestamp := module.ExportedFunction("get_timestamp_ms")
 	if getTimestamp == nil {
 		return time.Time{}, errors.New("get_timestamp_ms function not exported from WASM module")
@@ -316,15 +114,13 @@ func GetWasmTimestamp(ctx context.Context) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("failed to call get_timestamp_ms: %w", err)
 	}
 
-	timestampMs := results[0]
-	return time.Unix(0, int64(timestampMs)*int64(time.Millisecond)), nil
+	return time.Unix(0, int64(results[0])*int64(time.Millisecond)), nil
 }
 
-// Close cleans up the WASM runtime and module.
-// It should be called when the application is shutting down.
+// Close cleans up the WASM runtime.
 func Close(ctx context.Context) error {
-	runtimeMutex.Lock()
-	defer runtimeMutex.Unlock()
+	runtimeMu.Lock()
+	defer runtimeMu.Unlock()
 
 	if runtime != nil {
 		err := runtime.Close(ctx)
@@ -332,4 +128,140 @@ func Close(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+func callStringExport(ctx context.Context, name string) (string, error) {
+	module, err := instantiateModule(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer module.Close(ctx) //nolint:errcheck
+
+	exported := module.ExportedFunction(name)
+	if exported == nil {
+		return "", fmt.Errorf("%s function not exported from WASM module", name)
+	}
+
+	results, err := exported.Call(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to call %s: %w", name, err)
+	}
+
+	return readPackedString(ctx, module, results[0])
+}
+
+func callStringExportWithInput(ctx context.Context, name string, input string) (string, error) {
+	module, err := instantiateModule(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer module.Close(ctx) //nolint:errcheck
+
+	allocate := module.ExportedFunction("allocate")
+	deallocate := module.ExportedFunction("deallocate")
+	exported := module.ExportedFunction(name)
+	if allocate == nil || deallocate == nil || exported == nil {
+		return "", errors.New("required functions not exported from WASM module")
+	}
+
+	inputBytes := []byte(input)
+	inputLen := uint64(len(inputBytes))
+	allocResults, err := allocate.Call(ctx, inputLen)
+	if err != nil {
+		return "", fmt.Errorf("failed to allocate memory: %w", err)
+	}
+	inputPtr := allocResults[0]
+	defer deallocate.Call(ctx, inputPtr, inputLen) //nolint:errcheck
+
+	if !module.Memory().Write(uint32(inputPtr), inputBytes) {
+		return "", errors.New("failed to write to WASM memory")
+	}
+
+	results, err := exported.Call(ctx, inputPtr, inputLen)
+	if err != nil {
+		return "", fmt.Errorf("failed to call %s: %w", name, err)
+	}
+
+	return readPackedString(ctx, module, results[0])
+}
+
+func instantiateModule(ctx context.Context) (api.Module, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	rt, compiled, err := initRuntime()
+	if err != nil {
+		return nil, err
+	}
+
+	moduleConfig := wazero.NewModuleConfig().
+		WithName(uniqueModuleName()).
+		WithArgs("secure_tunnel_go_wasm").
+		WithSysWalltime().
+		WithSysNanotime().
+		WithRandSource(rand.Reader)
+
+	module, err := rt.InstantiateModule(ctx, compiled, moduleConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to instantiate WASM module: %w", err)
+	}
+	return module, nil
+}
+
+func initRuntime() (wazero.Runtime, wazero.CompiledModule, error) {
+	initCtx := context.Background()
+
+	runtimeOnce.Do(func() {
+		runtime = wazero.NewRuntime(initCtx)
+		wasi_snapshot_preview1.MustInstantiate(initCtx, runtime)
+	})
+
+	runtimeMu.RLock()
+	rt := runtime
+	runtimeMu.RUnlock()
+
+	if rt == nil {
+		return nil, nil, errors.New("failed to initialize runtime")
+	}
+
+	compiledModuleOnce.Do(func() {
+		compiledModule, compiledModuleErr = rt.CompileModule(initCtx, wasmBytes)
+	})
+
+	return rt, compiledModule, compiledModuleErr
+}
+
+func readPackedString(ctx context.Context, module api.Module, packed uint64) (string, error) {
+	if packed == 0 {
+		return "", errors.New("allocation error in WASM module")
+	}
+
+	ptr := uint32(packed >> 32)
+	length := uint32(packed & 0xFFFFFFFF)
+	defer module.ExportedFunction("deallocate").Call(ctx, uint64(ptr), uint64(length)) //nolint:errcheck
+
+	resultBytes, ok := module.Memory().Read(ptr, length)
+	if !ok {
+		return "", errors.New("failed to read result from WASM memory")
+	}
+	result := string(resultBytes)
+
+	errorCheck := module.ExportedFunction("is_secure_tunnel_error")
+	if errorCheck == nil {
+		return "", errors.New("is_secure_tunnel_error function not exported from WASM module")
+	}
+	errorResults, err := errorCheck.Call(ctx, uint64(ptr), uint64(length))
+	if err != nil {
+		return "", fmt.Errorf("failed to check result status: %w", err)
+	}
+	if errorResults[0] != 0 {
+		return "", &ABIError{msg: strings.TrimPrefix(result, "Error: ")}
+	}
+
+	return result, nil
+}
+
+func uniqueModuleName() string {
+	return fmt.Sprintf("secure_tunnel_go_wasm_%d", atomic.AddUint64(&moduleNameCounter, 1))
 }

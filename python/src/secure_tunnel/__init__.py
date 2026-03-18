@@ -5,16 +5,24 @@
 #
 # SPDX-License-Identifier: MPL-2.0
 
-"""Secure Tunnel Python bindings.
+"""Secure Tunnel Python bindings."""
 
-A simple arithmetic expression parser that can evaluate expressions like "1+2+3".
+from .secure_tunnel import (
+    __version__,
+    example_service_descriptor_json,
+    normalize_service_descriptor_json,
+    protocol_id_v1,
+    quic_alpn_v1,
+    validate_service_descriptor_json,
+    wss_subprotocol_v1,
+)
 
-Example:
-    >>> from secure_tunnel import parse
-    >>> parse("1+2+3")
-    '6'
-"""
-
-from .secure_tunnel import __version__, parse
-
-__all__ = ["__version__", "parse"]
+__all__ = [
+    "__version__",
+    "example_service_descriptor_json",
+    "normalize_service_descriptor_json",
+    "protocol_id_v1",
+    "quic_alpn_v1",
+    "validate_service_descriptor_json",
+    "wss_subprotocol_v1",
+]

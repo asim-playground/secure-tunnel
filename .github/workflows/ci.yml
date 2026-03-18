@@ -20,6 +20,16 @@ jobs:
         with:
           install: true
           cache: true
+          env: false
+      - name: Enable kache Rust wrapper
+        id: kache-env
+        shell: bash
+        run: |
+          cache_dir="${RUNNER_TEMP:-$PWD/.cache}/kache"
+          mkdir -p "$cache_dir"
+          echo "KACHE_CACHE_DIR=$cache_dir" >> "$GITHUB_ENV"
+          echo "RUSTC_WRAPPER=kache" >> "$GITHUB_ENV"
+          echo "cache_dir=$cache_dir" >> "$GITHUB_OUTPUT"
       - name: Cache cargo
         uses: actions/cache@v5
         with:
@@ -27,10 +37,27 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-deps
+      - name: Cache kache compiler outputs
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.kache-env.outputs.cache_dir }}
+          key: ${{ runner.os }}-kache-${{ hashFiles('**/Cargo.lock', 'mise.lock') }}-deps
+          restore-keys: |
+            ${{ runner.os }}-kache-
       - name: Setup environment
         run: mise run setup
+      - name: Verify kache setup
+        run: |
+          kache --version
+          kache stats || true
       - name: Run dependency checks
         run: mise run deps-check
+      - name: Quiesce kache cache
+        if: always()
+        run: |
+          kache daemon stop || true
+          find "$KACHE_CACHE_DIR" -type s -delete 2>/dev/null || true
+          rm -f "$KACHE_CACHE_DIR/daemon.sock" 2>/dev/null || true
 
   lint:
     name: Lint
@@ -41,6 +68,16 @@ jobs:
         with:
           install: true
           cache: true
+          env: false
+      - name: Enable kache Rust wrapper
+        id: kache-env
+        shell: bash
+        run: |
+          cache_dir="${RUNNER_TEMP:-$PWD/.cache}/kache"
+          mkdir -p "$cache_dir"
+          echo "KACHE_CACHE_DIR=$cache_dir" >> "$GITHUB_ENV"
+          echo "RUSTC_WRAPPER=kache" >> "$GITHUB_ENV"
+          echo "cache_dir=$cache_dir" >> "$GITHUB_OUTPUT"
       - name: Cache cargo
         uses: actions/cache@v5
         with:
@@ -48,10 +85,27 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-lint
+      - name: Cache kache compiler outputs
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.kache-env.outputs.cache_dir }}
+          key: ${{ runner.os }}-kache-${{ hashFiles('**/Cargo.lock', 'mise.lock') }}-lint
+          restore-keys: |
+            ${{ runner.os }}-kache-
       - name: Setup environment
         run: mise run setup
+      - name: Verify kache setup
+        run: |
+          kache --version
+          kache stats || true
       - name: Run lint suite
         run: mise run lint-all
+      - name: Quiesce kache cache
+        if: always()
+        run: |
+          kache daemon stop || true
+          find "$KACHE_CACHE_DIR" -type s -delete 2>/dev/null || true
+          rm -f "$KACHE_CACHE_DIR/daemon.sock" 2>/dev/null || true
 
   test:
     name: Test Suite
@@ -65,6 +119,16 @@ jobs:
         with:
           install: true
           cache: true
+          env: false
+      - name: Enable kache Rust wrapper
+        id: kache-env
+        shell: bash
+        run: |
+          cache_dir="${RUNNER_TEMP:-$PWD/.cache}/kache"
+          mkdir -p "$cache_dir"
+          echo "KACHE_CACHE_DIR=$cache_dir" >> "$GITHUB_ENV"
+          echo "RUSTC_WRAPPER=kache" >> "$GITHUB_ENV"
+          echo "cache_dir=$cache_dir" >> "$GITHUB_OUTPUT"
       - name: Cache cargo
         uses: actions/cache@v5
         with:
@@ -72,8 +136,19 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-test
+      - name: Cache kache compiler outputs
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.kache-env.outputs.cache_dir }}
+          key: ${{ runner.os }}-kache-${{ hashFiles('**/Cargo.lock', 'mise.lock') }}-test
+          restore-keys: |
+            ${{ runner.os }}-kache-
       - name: Setup environment
         run: mise run setup
+      - name: Verify kache setup
+        run: |
+          kache --version
+          kache stats || true
       - name: Run full test suite
         if: runner.os != 'Windows'
         shell: bash
@@ -82,6 +157,13 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: mise x -- cargo test --workspace
+      - name: Quiesce kache cache
+        if: always()
+        shell: bash
+        run: |
+          kache daemon stop || true
+          find "$KACHE_CACHE_DIR" -type s -delete 2>/dev/null || true
+          rm -f "$KACHE_CACHE_DIR/daemon.sock" 2>/dev/null || true
 
   coverage:
     name: Coverage
@@ -92,6 +174,16 @@ jobs:
         with:
           install: true
           cache: true
+          env: false
+      - name: Enable kache Rust wrapper
+        id: kache-env
+        shell: bash
+        run: |
+          cache_dir="${RUNNER_TEMP:-$PWD/.cache}/kache"
+          mkdir -p "$cache_dir"
+          echo "KACHE_CACHE_DIR=$cache_dir" >> "$GITHUB_ENV"
+          echo "RUSTC_WRAPPER=kache" >> "$GITHUB_ENV"
+          echo "cache_dir=$cache_dir" >> "$GITHUB_OUTPUT"
       - name: Cache cargo
         uses: actions/cache@v5
         with:
@@ -99,10 +191,27 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-coverage
+      - name: Cache kache compiler outputs
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.kache-env.outputs.cache_dir }}
+          key: ${{ runner.os }}-kache-${{ hashFiles('**/Cargo.lock', 'mise.lock') }}-coverage
+          restore-keys: |
+            ${{ runner.os }}-kache-
       - name: Setup environment
         run: mise run setup
+      - name: Verify kache setup
+        run: |
+          kache --version
+          kache stats || true
       - name: Generate coverage
         run: mise run rust:coverage
+      - name: Quiesce kache cache
+        if: always()
+        run: |
+          kache daemon stop || true
+          find "$KACHE_CACHE_DIR" -type s -delete 2>/dev/null || true
+          rm -f "$KACHE_CACHE_DIR/daemon.sock" 2>/dev/null || true
       - name: Upload to codecov
         uses: codecov/codecov-action@v5
         with:
@@ -129,6 +238,16 @@ jobs:
         with:
           install: true
           cache: true
+          env: false
+      - name: Enable kache Rust wrapper
+        id: kache-env
+        shell: bash
+        run: |
+          cache_dir="${RUNNER_TEMP:-$PWD/.cache}/kache"
+          mkdir -p "$cache_dir"
+          echo "KACHE_CACHE_DIR=$cache_dir" >> "$GITHUB_ENV"
+          echo "RUSTC_WRAPPER=kache" >> "$GITHUB_ENV"
+          echo "cache_dir=$cache_dir" >> "$GITHUB_OUTPUT"
       - name: Cache cargo
         uses: actions/cache@v5
         with:
@@ -136,10 +255,21 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-cross-${{ matrix.target }}
+      - name: Cache kache compiler outputs
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.kache-env.outputs.cache_dir }}
+          key: ${{ runner.os }}-kache-${{ hashFiles('**/Cargo.lock', 'mise.lock') }}-cross-${{ matrix.target }}
+          restore-keys: |
+            ${{ runner.os }}-kache-
       - name: Install cross
         run: cargo install cross --locked
       - name: Setup environment
         run: mise run setup
+      - name: Verify kache setup
+        run: |
+          kache --version
+          kache stats || true
       - name: Cross compile and test portable crates
         run: cross test --release --all-features --workspace --exclude secure-tunnel-py --target ${{ matrix.target }}
       - name: Cross compile Python bindings
@@ -147,3 +277,9 @@ jobs:
         env:
           PYO3_BUILD_EXTENSION_MODULE: 1
         run: cross build --release --all-features -p secure-tunnel-py --target ${{ matrix.target }}
+      - name: Quiesce kache cache
+        if: always()
+        run: |
+          kache daemon stop || true
+          find "$KACHE_CACHE_DIR" -type s -delete 2>/dev/null || true
+          rm -f "$KACHE_CACHE_DIR/daemon.sock" 2>/dev/null || true

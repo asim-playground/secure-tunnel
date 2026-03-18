@@ -1,5 +1,5 @@
 [package]
-name = "secure-tunnel-go"
+name = "secure-tunnel-ffi"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,13 +7,13 @@ rust-version.workspace = true
 authors.workspace = true
 
 [lib]
-crate-type = ["cdylib"]
+name = "secure_tunnel_ffi"
+crate-type = ["cdylib", "staticlib"]
 path = "src/lib.rs"
 
 [dependencies]
 secure-tunnel-core = { path = "../core" }
-libc = "0.2"
-anyhow = "1.0"
+serde_json = "1.0"
 
 [lints.rust]
 unsafe_code = "allow"

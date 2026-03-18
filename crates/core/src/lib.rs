@@ -12,17 +12,19 @@
 //! transport planning, session states, and transport-neutral framed I/O.
 
 mod codec;
-mod compat;
 mod constants;
 mod descriptor;
+#[cfg(test)]
+mod descriptor_tests;
 mod error;
 mod noise;
+#[cfg(test)]
+mod prototype_transport;
 mod selector;
 mod session;
 mod transport;
 mod trust;
 
-pub use compat::{ParseError, parse};
 pub use constants::{
     MAX_APPLICATION_PLAINTEXT_SIZE, MAX_RECORD_PAYLOAD_SIZE, NOISE_SUITE_V1, PROTOCOL_ID_V1,
     QUIC_ALPN_V1, WSS_SUBPROTOCOL_V1,

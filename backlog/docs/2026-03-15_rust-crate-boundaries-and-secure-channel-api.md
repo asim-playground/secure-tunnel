@@ -230,8 +230,9 @@ intentionally colocated in one crate today:
   descriptor shape, and device policy.
 - The new Rust surface in `crates/core/src/*.rs` matches those docs while
   keeping carrier-specific dependencies out of the core API.
-- The repository keeps a temporary parser compatibility shim only to avoid
-  mixing this architecture task with unrelated language-binding regeneration.
+- The temporary parser compatibility shim has been removed by task `00000016`
+  now that binding surfaces are regenerated around protocol metadata and
+  descriptor validation.
 
 ## Next Actions
 
@@ -239,5 +240,5 @@ intentionally colocated in one crate today:
   transport modules.
 - Keep later tasks from adding `quinn` or WebSocket imports to the secure-core
   modules.
-- Remove the parser compatibility shim once binding surfaces are regenerated
-  around real secure-channel APIs.
+- Keep binding surfaces anchored on real Secure Tunnel protocol and descriptor
+  APIs rather than scaffold parser examples.

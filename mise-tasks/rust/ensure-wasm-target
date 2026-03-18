@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Install the wasm32-unknown-unknown target for the active toolchain"
+#MISE description="Install required WASM targets for the active toolchain"
 set -euo pipefail
 
 toolchain="${RUSTUP_TOOLCHAIN:-$(rustc -V | awk '{print $2}')}"
@@ -14,4 +14,4 @@ else
     exit 1
 fi
 
-"$rustup_bin" target add wasm32-unknown-unknown --toolchain "$toolchain"
+"$rustup_bin" target add wasm32-unknown-unknown wasm32-wasip1 --toolchain "$toolchain"

@@ -1,24 +1,25 @@
 # Go WASM Bindings
 
-This directory contains a Go binding for the parser that uses WebAssembly (WASM)
-with WASI support instead of a native Rust library.
+This directory contains a Go binding for Secure Tunnel protocol metadata and
+descriptor validation that uses WebAssembly (WASM) with WASI support instead of
+a native Rust library.
 
 ## Features
 
 - Uses WebAssembly (WASM) compiled from Rust code
 - Runs in Go using the wazero runtime (zero dependencies)
 - Supports WASI for system interfaces (time, etc.)
-- Provides the same API as the native Go bindings
+- Provides the same descriptor/protocol API shape as the native Go bindings
 
 ## Requirements
 
-- Rust with the wasm32-wasi target installed
+- Rust with the `wasm32-wasip1` target installed
 - Go 1.21 or newer
 
 ## Building
 
 ```bash
-# Install wasm32-wasi target if needed
+# Install the `wasm32-wasip1` target if needed
 mise run go-wasm:setup
 
 # Build the WASM module
@@ -44,26 +45,18 @@ import (
 func main() {
     ctx := context.Background()
     
-    // Parse a single expression
-    expr, err := binding.Parse(ctx, "1+2+3")
+    // Inspect protocol metadata
+    protocolID, err := binding.ProtocolID(ctx)
     if err != nil {
-        log.Fatalf("Parse error: %v", err)
+        log.Fatalf("ProtocolID error: %v", err)
     }
-    fmt.Println(expr.String()) // Outputs: 1+2+3 = 6
-    
-    // Use MustParse for expressions you know are valid
-    expr2 := binding.MustParse("10+20")
-    fmt.Println(expr2.Result) // Outputs: 30
-    
-    // Parse multiple expressions concurrently
-    inputs := []string{"1+2", "3+4", "5+6"}
-    results, err := binding.ParseConcurrent(ctx, inputs)
+    fmt.Println(protocolID)
+
+    // Validate a service descriptor
+    descriptor := binding.MustExampleServiceDescriptorJSON()
+    err = binding.ValidateServiceDescriptorJSON(ctx, descriptor)
     if err != nil {
-        log.Fatalf("ParseConcurrent error: %v", err)
-    }
-    
-    for _, result := range results {
-        fmt.Println(result.String())
+        log.Fatalf("descriptor validation error: %v", err)
     }
     
     // Get timestamp from the WASM module (uses WASI)

@@ -13,7 +13,7 @@ superseded_by: []
 - Status: `active`
 - Owner: `Asim Ihsan`
 - Related Plans: `none`
-- Related Tasks: `task-00000001, task-00000003, task-00000004, task-00000005, task-00000006, task-00000007, task-00000008, task-00000009, task-00000010, task-00000011, task-00000012, task-00000013, task-00000014, task-00000015`
+- Related Tasks: `task-00000001, task-00000003, task-00000004, task-00000005, task-00000006, task-00000007, task-00000008, task-00000009, task-00000010, task-00000011, task-00000012, task-00000013, task-00000014, task-00000015, task-00000016`
 
 ## Summary
 
@@ -127,7 +127,7 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 
 ## Phase Plan
 
-- Current Phase: `Phase 1 - shape implementation seams`
+- Current Phase: `Phase 3 - managed-network compatibility`
 - Phase Summary:
   - `Phase 0` is complete: the baseline v1 decisions, device policy, and
     historical protocol spec are captured and the active `v1-*` docs now carry
@@ -135,13 +135,12 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
   - `Phase 1` is in progress: the active transport-policy and
     protocol/binding docs cover much of tasks `00000007` and `00000008`,
     `task-00000001` now provides the starter crate set for the first prototype
-    slices, `task-00000009` remains only partially addressed, and crate/API
-    architecture work is still open.
-  - `Phase 2` now has `task-00000010` and `task-00000011` complete: the shared
-    selector, framed-duplex seam, transport-neutral Noise evaluator, trust
-    verification path, handshake-hash export, and encrypted-close proof slice
-    are in place, while `task-00000012` remains the next adapter-facing
-    implementation step.
+    slices, and `task-00000009` remains only partially addressed.
+  - `Phase 2` now has `task-00000010`, `task-00000011`, `task-00000012`, and
+    `task-00000015` complete: the shared selector, framed-duplex seam, trust
+    verification path, transport prototype harness, portability work, and
+    CI-stability updates are in place. `Phase 3` is now the active slice for
+    managed-network compatibility.
 
 ### Phase 0 - `lock v1 decisions`
 
@@ -166,7 +165,7 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
     - `task-00000009` `define udp-first deployment and observability requirements`
 - Exit Criteria:
     - [x] secure-channel, transport, and auth/session responsibilities are separated.
-    - [ ] `QUIC` preference and `WSS` fallback behavior are documented precisely enough to implement.
+    - [x] `QUIC` preference and `WSS` fallback behavior are documented precisely enough to implement.
     - [x] initial crate choices are concrete enough to support the first proving slices.
     - [x] initial implementation order is clear enough to begin coding without structural churn.
 
@@ -212,8 +211,9 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 | task-`00000009` | `define udp-first deployment and observability requirements` | `Phase 1` | `task-00000007, task-00000008` | `proposed` |
 | task-`00000010` | `implement framed duplex abstraction and transport selector` | `Phase 2` | `task-00000005, task-00000007, task-00000008` | `completed` |
 | task-`00000011` | `prototype server-auth noise handshake and trust verification on transport-neutral frames` | `Phase 2` | `task-00000005, task-00000008, task-00000010` | `completed` |
-| task-`00000015` | `stabilize ci portability and add docker repro` | `Phase 2` | `task-00000011` | `in_progress` |
-| task-`00000012` | `prototype quic-preferred transport with wss fallback and local secure session` | `Phase 2` | `task-00000005, task-00000008, task-00000009, task-00000010, task-00000011` | `proposed` |
+| task-`00000015` | `stabilize ci portability and add docker repro` | `Phase 2` | `task-00000011` | `completed` |
+| task-`00000012` | `prototype quic-preferred transport with wss fallback and local secure session` | `Phase 2` | `task-00000005, task-00000008, task-00000009, task-00000010, task-00000011` | `completed` |
+| task-`00000016` | `update runtimes deps and add swift callable library surface` | `Phase 2` | `task-00000005, task-00000015` | `completed` |
 | task-`00000013` | `allow optional custom ca cert for intercepted wss or quic` | `Phase 3` | `task-00000009, task-00000012` | `proposed` |
 | task-`00000014` | `allow optional http proxy for wss client` | `Phase 3` | `task-00000009, task-00000012, task-00000013` | `proposed` |
 

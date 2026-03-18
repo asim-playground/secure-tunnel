@@ -5,21 +5,17 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-//! WASM-exported helpers used by the Go/WASI scaffold binding.
+//! WASM-exported helpers used by the Go/WASI binding.
 
-use secure_tunnel_core::parse;
+use secure_tunnel_core::{ServiceDescriptor, example_service_descriptor};
 use std::alloc::Layout;
 use std::ptr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-// Initialize Talc as the global allocator for WebAssembly
+// Initialize Talc as the global allocator for single-threaded WebAssembly.
 #[cfg(target_arch = "wasm32")]
-/// SAFETY: The runtime environment must be single-threaded WASM.
 #[global_allocator]
-static ALLOCATOR: talc::TalckWasm = unsafe { talc::TalckWasm::new_global() };
-
-/// Version of the WASM interface
-pub const VERSION: &str = "1.0.0";
+static ALLOCATOR: talc::wasm::WasmDynamicTalc = talc::wasm::new_wasm_dynamic_allocator();
 
 /// Allocates memory that can be accessed from the host.
 ///
@@ -41,51 +37,85 @@ pub unsafe extern "C" fn allocate(size: usize) -> *mut u8 {
 /// The pointer must have been allocated with `allocate`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn deallocate(ptr: *mut u8, size: usize) {
-    if !ptr.is_null() {
-        if let Some(layout) = allocation_layout(size) {
-            unsafe {
-                std::alloc::dealloc(ptr, layout);
-            }
+    if !ptr.is_null()
+        && let Some(layout) = allocation_layout(size)
+    {
+        unsafe {
+            std::alloc::dealloc(ptr, layout);
         }
     }
 }
 
-/// Parse an arithmetic expression and return a pointer/length pair as a u64.
-/// The high 32 bits contain the pointer, the low 32 bits contain the length.
-///
-/// Returns a packed u64 with pointer in high 32 bits, length in low 32 bits.
-/// The returned memory must be deallocated by the caller using `deallocate`.
-/// Returns 0 if an error occurs.
+/// Return the stable v1 protocol identifier as a pointer/length pair.
+#[unsafe(no_mangle)]
+pub extern "C" fn protocol_id_v1() -> u64 {
+    pack_bytes(secure_tunnel_core::PROTOCOL_ID_V1.as_bytes())
+}
+
+/// Return the v1 QUIC ALPN value as a pointer/length pair.
+#[unsafe(no_mangle)]
+pub extern "C" fn quic_alpn_v1() -> u64 {
+    pack_bytes(secure_tunnel_core::QUIC_ALPN_V1.as_bytes())
+}
+
+/// Return the v1 WSS subprotocol value as a pointer/length pair.
+#[unsafe(no_mangle)]
+pub extern "C" fn wss_subprotocol_v1() -> u64 {
+    pack_bytes(secure_tunnel_core::WSS_SUBPROTOCOL_V1.as_bytes())
+}
+
+/// Return a sample service descriptor JSON document as a pointer/length pair.
+#[unsafe(no_mangle)]
+pub extern "C" fn example_service_descriptor_json() -> u64 {
+    match serde_json::to_string(&example_service_descriptor()) {
+        Ok(json) => pack_bytes(json.as_bytes()),
+        Err(error) => pack_error(&error.to_string()),
+    }
+}
+
+/// Validate a descriptor JSON document and return "ok" or an error.
 ///
 /// # Safety
 ///
 /// The caller must ensure that `ptr` points to valid memory with `len` bytes.
-/// The input must contain valid UTF-8 text for proper parsing.
-/// The caller is responsible for deallocating the returned memory with `deallocate`
-/// to prevent memory leaks.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn parse_expression(ptr: *const u8, len: usize) -> u64 {
-    let input_bytes = unsafe { std::slice::from_raw_parts(ptr, len) };
-
-    if let Ok(input_str) = std::str::from_utf8(input_bytes) {
-        return match parse(input_str) {
-            Ok(result) => pack_bytes(result.as_bytes()),
-            Err(e) => pack_bytes(format!("Error: {e}").as_bytes()),
-        };
+pub unsafe extern "C" fn validate_service_descriptor_json(ptr: *const u8, len: usize) -> u64 {
+    match decode_descriptor(ptr, len) {
+        Ok(descriptor) => match descriptor.validate() {
+            Ok(()) => pack_bytes(b"ok"),
+            Err(error) => pack_error(&error.to_string()),
+        },
+        Err(error) => pack_error(&error),
     }
-
-    pack_bytes(b"Error: invalid UTF-8 in input")
 }
 
-/// Check if the result of `parse_expression` is an error.
-/// The first byte of the result is checked to determine if it starts with "Error:".
+/// Decode, validate, and re-encode a descriptor JSON document.
 ///
 /// # Safety
 ///
-/// The caller must ensure the ptr/len pair was obtained from a call to `parse_expression`
-/// and the memory is still valid.
+/// The caller must ensure that `ptr` points to valid memory with `len` bytes.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn is_parse_error(ptr: *const u8, len: usize) -> i32 {
+pub unsafe extern "C" fn normalize_service_descriptor_json(ptr: *const u8, len: usize) -> u64 {
+    match decode_descriptor(ptr, len) {
+        Ok(descriptor) => match descriptor.validate() {
+            Ok(()) => match serde_json::to_string(&descriptor) {
+                Ok(json) => pack_bytes(json.as_bytes()),
+                Err(error) => pack_error(&error.to_string()),
+            },
+            Err(error) => pack_error(&error.to_string()),
+        },
+        Err(error) => pack_error(&error),
+    }
+}
+
+/// Check whether a pointer/length pair returned by this module is an error.
+///
+/// # Safety
+///
+/// The caller must ensure the ptr/len pair was obtained from this module and
+/// the memory is still valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn is_secure_tunnel_error(ptr: *const u8, len: usize) -> i32 {
     if ptr.is_null() || len < 6 {
         return 0;
     }
@@ -95,7 +125,6 @@ pub unsafe extern "C" fn is_parse_error(ptr: *const u8, len: usize) -> i32 {
 }
 
 /// Get the current timestamp in milliseconds since the UNIX epoch.
-/// This demonstrates using WASI to get system time.
 #[unsafe(no_mangle)]
 pub extern "C" fn get_timestamp_ms() -> u64 {
     SystemTime::now()
@@ -105,8 +134,22 @@ pub extern "C" fn get_timestamp_ms() -> u64 {
         .unwrap_or(0)
 }
 
+fn decode_descriptor(ptr: *const u8, len: usize) -> Result<ServiceDescriptor, String> {
+    if ptr.is_null() {
+        return Err("descriptor pointer is null".to_owned());
+    }
+
+    let input_bytes = unsafe { std::slice::from_raw_parts(ptr, len) };
+    let input = std::str::from_utf8(input_bytes).map_err(|error| error.to_string())?;
+    serde_json::from_str::<ServiceDescriptor>(input).map_err(|error| error.to_string())
+}
+
 fn allocation_layout(size: usize) -> Option<Layout> {
     Layout::from_size_align(size.max(1), 8).ok()
+}
+
+fn pack_error(message: &str) -> u64 {
+    pack_bytes(format!("Error: {message}").as_bytes())
 }
 
 fn pack_bytes(bytes: &[u8]) -> u64 {
@@ -121,123 +164,4 @@ fn pack_bytes(bytes: &[u8]) -> u64 {
     }
 
     ((result_ptr as u64) << 32) | (result_len as u64)
-}
-
-#[cfg(target_arch = "wasm32")]
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // Helper to unpack a pointer/length pair from a u64
-    unsafe fn unpack_ptr_len(packed: u64) -> (*const u8, usize) {
-        let ptr = (packed >> 32) as *const u8;
-        let len = (packed & 0xFFFFFFFF) as usize;
-        (ptr, len)
-    }
-
-    // Helper to read a string from a pointer/length pair
-    unsafe fn read_string(ptr: *const u8, len: usize) -> String {
-        let slice = std::slice::from_raw_parts(ptr, len);
-        String::from_utf8_lossy(slice).to_string()
-    }
-
-    // Safe wrapper for parse_expression to handle memory cleanup
-    fn safe_parse(input: &str) -> Result<String, String> {
-        let input_bytes = input.as_bytes();
-        unsafe {
-            let result = parse_expression(input_bytes.as_ptr(), input_bytes.len());
-            if result == 0 {
-                return Err("Allocation error".to_string());
-            }
-
-            let (ptr, len) = unpack_ptr_len(result);
-            let output = read_string(ptr, len);
-
-            // Check if it's an error
-            let is_error = is_parse_error(ptr, len) != 0;
-
-            // Clean up allocated memory
-            deallocate(ptr as *mut u8, len);
-
-            if is_error { Err(output) } else { Ok(output) }
-        }
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    #[test]
-    fn test_parse_expression_success() {
-        match safe_parse("1+2") {
-            Ok(result) => assert_eq!(result, "3"),
-            Err(err) => panic!("Expected success, got error: {}", err),
-        }
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    #[test]
-    fn test_parse_expression_syntax_error() {
-        match safe_parse("1+*2") {
-            Ok(result) => panic!("Expected error, got success: {}", result),
-            Err(err) => assert!(err.starts_with("Error:")),
-        }
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    #[test]
-    fn test_parse_expression_empty_input() {
-        match safe_parse("") {
-            Ok(result) => panic!("Expected error, got success: {}", result),
-            Err(err) => assert!(err.starts_with("Error:")),
-        }
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    #[test]
-    fn test_parse_expression_complex() {
-        // Our parser only supports addition, so this will actually fail
-        match safe_parse("1+2") {
-            Ok(result) => assert_eq!(result, "3"),
-            Err(err) => panic!("Expected success, got error: {}", err),
-        }
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    #[test]
-    fn test_concurrent_allocation() {
-        use std::sync::{Arc, Barrier};
-        use std::thread;
-
-        // Create a barrier to synchronize all threads to start at the same time
-        let thread_count = 5; // Reduced from 10 to lower risk of resource constraints
-        let barrier = Arc::new(Barrier::new(thread_count));
-
-        let handles: Vec<_> = (0..thread_count)
-            .map(|i| {
-                let barrier = Arc::clone(&barrier);
-                thread::spawn(move || {
-                    // Wait for all threads to reach this point before starting
-                    barrier.wait();
-
-                    let input = format!("{}+{}", i, i);
-                    match safe_parse(&input) {
-                        Ok(result) => {
-                            assert_eq!(result, format!("{}", i + i));
-                            true
-                        }
-                        Err(err) => {
-                            println!("Error parsing {}: {}", input, err);
-                            false
-                        }
-                    }
-                })
-            })
-            .collect();
-
-        // Wait for all threads to complete
-        for (i, handle) in handles.into_iter().enumerate() {
-            match handle.join() {
-                Ok(result) => assert!(result, "Thread {} failed", i),
-                Err(e) => panic!("Thread {} panicked: {:?}", i, e),
-            }
-        }
-    }
 }
