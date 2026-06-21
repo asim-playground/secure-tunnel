@@ -9,6 +9,8 @@ use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
+use crate::auth::{AccountSessionContext, DeviceSessionContext, PendingDeviceChallenge};
+use crate::descriptor::BootstrapDescriptor;
 use crate::error::{SdkError, SdkResult};
 use crate::reports::Carrier;
 
@@ -70,11 +72,20 @@ impl std::fmt::Debug for SecureTunnelSession {
 }
 
 impl SecureTunnelSession {
-    pub(super) fn from_selected(selected: secure_tunnel_core::SelectedTransport) -> Self {
+    pub(super) fn from_selected(
+        selected: secure_tunnel_core::SelectedTransport,
+        descriptor: BootstrapDescriptor,
+    ) -> Self {
+        let artifacts = selected.artifacts.clone();
         Self {
             inner: Arc::new(Mutex::new(SessionInner {
                 state: SessionState::SecureReady,
                 selected_carrier: selected.report.carrier.into(),
+                descriptor,
+                artifacts,
+                account: None,
+                device: None,
+                pending_device_challenge: None,
                 transport: Some(selected.transport),
             })),
         }
@@ -163,7 +174,7 @@ impl SecureTunnelSession {
         }
     }
 
-    fn lease_transport(
+    pub(crate) fn lease_transport(
         &self,
         transient_state: Option<SessionState>,
     ) -> SdkResult<TransportLease<'_>> {
@@ -187,7 +198,7 @@ impl SecureTunnelSession {
         })
     }
 
-    fn restore_transport(
+    pub(crate) fn restore_transport(
         &self,
         transport: Box<dyn secure_tunnel_core::FramedDuplex>,
         state: SessionState,
@@ -195,6 +206,26 @@ impl SecureTunnelSession {
         let mut inner = self.lock_inner()?;
         if inner.state != SessionState::Closed {
             inner.state = state;
+            inner.transport = Some(transport);
+        }
+        drop(inner);
+        Ok(())
+    }
+
+    pub(crate) fn restore_transport_with_auth_state(
+        &self,
+        transport: Box<dyn secure_tunnel_core::FramedDuplex>,
+        state: SessionState,
+        account: Option<AccountSessionContext>,
+        device: Option<DeviceSessionContext>,
+        pending_device_challenge: Option<PendingDeviceChallenge>,
+    ) -> SdkResult<()> {
+        let mut inner = self.lock_inner()?;
+        if inner.state != SessionState::Closed {
+            inner.state = state;
+            inner.account = account;
+            inner.device = device;
+            inner.pending_device_challenge = pending_device_challenge;
             inner.transport = Some(transport);
         }
         drop(inner);
@@ -211,40 +242,67 @@ impl SecureTunnelSession {
         })
     }
 
-    fn lock_inner(&self) -> SdkResult<std::sync::MutexGuard<'_, SessionInner>> {
+    pub(crate) fn lock_inner(&self) -> SdkResult<std::sync::MutexGuard<'_, SessionInner>> {
         self.inner
             .lock()
             .map_err(|_| SdkError::internal("session lock is poisoned"))
     }
 }
 
-struct SessionInner {
-    state: SessionState,
-    selected_carrier: Carrier,
-    transport: Option<Box<dyn secure_tunnel_core::FramedDuplex>>,
+pub(crate) struct SessionInner {
+    pub(crate) state: SessionState,
+    pub(crate) selected_carrier: Carrier,
+    pub(crate) descriptor: BootstrapDescriptor,
+    pub(crate) artifacts: secure_tunnel_core::SecureReadyArtifacts,
+    pub(crate) account: Option<AccountSessionContext>,
+    pub(crate) device: Option<DeviceSessionContext>,
+    pub(crate) pending_device_challenge: Option<PendingDeviceChallenge>,
+    pub(crate) transport: Option<Box<dyn secure_tunnel_core::FramedDuplex>>,
 }
 
-struct TransportLease<'a> {
+pub(crate) struct TransportLease<'a> {
     session: &'a SecureTunnelSession,
     restore_state: SessionState,
     transport: Option<Box<dyn secure_tunnel_core::FramedDuplex>>,
 }
 
 impl TransportLease<'_> {
-    fn transport_mut(&mut self) -> SdkResult<&mut (dyn secure_tunnel_core::FramedDuplex + '_)> {
+    pub(crate) fn transport_mut(
+        &mut self,
+    ) -> SdkResult<&mut (dyn secure_tunnel_core::FramedDuplex + '_)> {
         let Some(transport) = self.transport.as_mut() else {
             return Err(SdkError::internal("session transport lease is empty"));
         };
         Ok(transport.as_mut())
     }
 
-    fn restore(mut self) -> SdkResult<()> {
+    pub(crate) fn restore(mut self) -> SdkResult<()> {
         let transport = self
             .transport
             .take()
             .ok_or_else(|| SdkError::internal("session transport lease is empty"))?;
         self.session
             .restore_transport(transport, self.restore_state)
+    }
+
+    pub(crate) fn restore_with_auth_state(
+        mut self,
+        state: SessionState,
+        account: Option<AccountSessionContext>,
+        device: Option<DeviceSessionContext>,
+        pending_device_challenge: Option<PendingDeviceChallenge>,
+    ) -> SdkResult<()> {
+        let transport = self
+            .transport
+            .take()
+            .ok_or_else(|| SdkError::internal("session transport lease is empty"))?;
+        self.session.restore_transport_with_auth_state(
+            transport,
+            state,
+            account,
+            device,
+            pending_device_challenge,
+        )
     }
 
     fn finish_closed(mut self) -> SdkResult<CloseReport> {

@@ -70,7 +70,7 @@ impl BootstrapDescriptor {
         self.descriptor.service_id.clone()
     }
 
-    pub(super) const fn core_descriptor(&self) -> &secure_tunnel_core::ServiceDescriptor {
+    pub(crate) const fn core_descriptor(&self) -> &secure_tunnel_core::ServiceDescriptor {
         &self.descriptor
     }
 }

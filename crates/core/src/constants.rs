@@ -9,7 +9,7 @@
 pub const PROTOCOL_ID_V1: &str = "secure-tunnel-v1";
 
 /// v1 Noise suite identifier.
-pub const NOISE_SUITE_V1: &str = "Noise_NX_25519_ChaChaPoly_BLAKE2s";
+pub const NOISE_SUITE_V1: &str = "Noise_NK1_25519_ChaChaPoly_BLAKE2s";
 
 /// v1 `QUIC` ALPN identifier.
 pub const QUIC_ALPN_V1: &str = PROTOCOL_ID_V1;

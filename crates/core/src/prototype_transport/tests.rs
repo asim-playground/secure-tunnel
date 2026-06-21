@@ -13,7 +13,7 @@ use crate::constants::{QUIC_ALPN_V1, WSS_SUBPROTOCOL_V1};
 use crate::selector::{TransportConnectors, TransportSelector};
 use crate::session::CacheDisposition;
 use crate::transport::{CarrierKind, FallbackReason};
-use crate::{ApiError, SnowNxClientEvaluator};
+use crate::{ApiError, SnowNk1ClientEvaluator, example_descriptor_trust_anchors};
 
 #[test]
 fn quic_binding_reaches_secure_ready_and_transports_application_data() {
@@ -24,7 +24,7 @@ fn quic_binding_reaches_secure_ready_and_transports_application_data() {
     );
     let quic = PrototypeQuicConnector::success(Box::new(fixture.transport));
     let wss = PrototypeWssConnector::failure(ApiError::TransportClosed);
-    let evaluator = SnowNxClientEvaluator::new();
+    let evaluator = evaluator_for_descriptor(&fixture.descriptor);
 
     let mut selected = block_on(TransportSelector::new(300).select(
         &fixture.descriptor,
@@ -74,7 +74,7 @@ fn quic_binding_falls_back_to_wss_when_outer_path_fails() {
         vec![b"pong".to_vec()],
     );
     let wss = PrototypeWssConnector::success(Box::new(fixture.transport));
-    let evaluator = SnowNxClientEvaluator::new();
+    let evaluator = evaluator_for_descriptor(&fixture.descriptor);
 
     let mut selected = block_on(TransportSelector::new(300).select(
         &fixture.descriptor,
@@ -153,7 +153,7 @@ fn quic_binding_rejects_descriptor_with_alpn_mismatch() {
         vec![b"pong".to_vec()],
     );
     let wss = PrototypeWssConnector::success(Box::new(wss_fixture.transport));
-    let evaluator = SnowNxClientEvaluator::new();
+    let evaluator = evaluator_for_descriptor(&quic_fixture.descriptor);
 
     let result = block_on(TransportSelector::new(300).select(
         &quic_fixture.descriptor,
@@ -187,7 +187,7 @@ fn wss_binding_records_malformed_target_without_falling_back() {
         .subprotocol = "bogus-subprotocol".to_owned();
     let quic = PrototypeQuicConnector::fallback(FallbackReason::OuterPathFailure);
     let wss = PrototypeWssConnector::success(Box::new(fixture.transport));
-    let evaluator = SnowNxClientEvaluator::new();
+    let evaluator = evaluator_for_descriptor(&fixture.descriptor);
 
     let result = block_on(TransportSelector::new(300).select(
         &fixture.descriptor,
@@ -212,12 +212,12 @@ fn wss_binding_records_malformed_target_without_falling_back() {
 fn quic_binding_stops_on_inner_trust_failure_without_trying_wss() {
     let fixture = scripted_session_fixture(
         CarrierKind::Quic,
-        AuthorizationMode::WrongServiceId,
+        AuthorizationMode::HandshakePayload,
         Vec::new(),
     );
     let quic = PrototypeQuicConnector::success(Box::new(fixture.transport));
     let wss = PrototypeWssConnector::failure(ApiError::TransportClosed);
-    let evaluator = SnowNxClientEvaluator::new();
+    let evaluator = evaluator_for_descriptor(&fixture.descriptor);
 
     let result = block_on(TransportSelector::new(300).select(
         &fixture.descriptor,
@@ -247,4 +247,11 @@ where
     F: Future,
 {
     futures::executor::block_on(future)
+}
+
+fn evaluator_for_descriptor(descriptor: &crate::ServiceDescriptor) -> SnowNk1ClientEvaluator {
+    SnowNk1ClientEvaluator::with_pinned_trust(
+        example_descriptor_trust_anchors(),
+        vec![descriptor.service_static_public_key_bytes().unwrap()],
+    )
 }

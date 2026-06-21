@@ -88,6 +88,8 @@ pub struct TransportCacheSnapshot {
     pub last_quic_failure: Option<FallbackReason>,
     /// Deadline after which `QUIC` should be reprobed on the same network.
     pub next_quic_probe_after_unix_seconds: Option<u64>,
+    /// Highest descriptor serial accepted for this service/environment cache key.
+    pub highest_descriptor_serial: Option<u64>,
 }
 
 /// Fallback-eligible `QUIC` failure classes.

@@ -14,6 +14,7 @@
 
 #![allow(clippy::module_name_repetitions, clippy::redundant_pub_crate)]
 
+mod auth;
 mod cancellation;
 mod client;
 mod descriptor;
@@ -23,6 +24,10 @@ mod ports;
 mod reports;
 mod session;
 
+pub use auth::{
+    AccountAuthMode, AccountAuthReport, AccountAuthRequest, AccountFreshness, DeviceAuthChallenge,
+    DeviceAuthReport, DeviceEnrollmentChallenge, DeviceEnrollmentReport, DeviceState,
+};
 pub use cancellation::CancellationHandle;
 pub use client::{ClientConfig, ConnectOptions, ConnectOutcome, SecureTunnelClient};
 pub use descriptor::{BootstrapDescriptor, TransportPolicyConfig};

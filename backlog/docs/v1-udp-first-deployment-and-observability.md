@@ -42,12 +42,13 @@ targets:
   enabled
 - shared service identity fields: `environment_id`, `service_id`, and
   `service_authority`
-- shared trust anchors and server-key authorization semantics
+- shared service static public key authorization semantics
 
 The `QUIC` and `WSS` carrier endpoints may terminate on different edge
 components, load balancers, or hostnames only when the descriptor explicitly
 maps those carrier routing names. The inner service authority remains the value
-bound into the Noise prologue and authorized server-key payload.
+bound into the Noise prologue and descriptor-authorized service static public
+key.
 
 Implementations must not infer that two carrier endpoints represent the same
 logical service only because their hostnames look related. The descriptor is
@@ -57,7 +58,7 @@ the routing and identity source of truth.
 
 `QUIC` address validation, Retry, amplification limits, and edge rate limiting
 belong to the outer carrier deployment. They protect the service front door but
-do not replace inner Noise server-key authorization.
+do not replace inner Noise service static public key authorization.
 
 V1 default posture:
 
@@ -82,7 +83,7 @@ Outer TLS identity and inner service identity are related but separate:
 - `WSS` uses HTTPS/TLS certificate validation for the outer WebSocket endpoint
 - `QUIC` uses the transport library's TLS stack and ALPN for the outer carrier
 - inner service identity is validated through the descriptor-bound Noise
-  prologue and server-key authorization
+  prologue and service static public key authorization
 
 The descriptor must explicitly carry any carrier-local host, authority, SNI, or
 URL mapping that differs from `service_authority`. Private outer-TLS trust and
@@ -157,11 +158,11 @@ Minimum local or staging validation should cover:
 | `QUIC` stream closes before `Secure Ready` | fallback reason is `outer_quic_closed_early` |
 | cached `QUIC`-bad network | client attempts `WSS` first until reprobe deadline |
 | fallback disabled by descriptor | client fails instead of silently using `WSS` |
-| invalid server-key authorization | client fails without fallback |
+| invalid service static public key authorization | client fails without fallback |
 | wrong service identity or service authority | client fails without fallback |
 | descriptor rollback or expired descriptor | client rejects descriptor before carrier selection |
-| server-key rotation with valid root signature | client accepts the new authorized server key |
-| server-key rotation with invalid or expired authorization | client rejects without fallback |
+| service-key rotation with valid descriptor update | client accepts the new authorized service key |
+| service-key rotation with invalid descriptor update | client rejects without fallback |
 | network migration or handoff before `Secure Ready` | outcome is classified as outer carrier failure |
 | network migration or handoff after `Secure Ready` | session either survives or records a close/failure classification |
 | encrypted close sent and acknowledged | close classification is `graceful` |
@@ -179,9 +180,9 @@ Do not treat a deployment as production-ready if any of these remain true:
 - inner trust failures can be misclassified as outer fallback
 - `Secure Ready` success is not measured by carrier
 - descriptor rollback/freshness rejection is not tested
-- server-key rotation success and failure are not tested
+- descriptor signature, service static key pin, and key-rotation success/failure
+  are not tested
 - Retry or address-validation failures are invisible
 - close classifications cannot distinguish graceful close from abrupt carrier
   loss
 - telemetry redaction rules are not documented and tested
-

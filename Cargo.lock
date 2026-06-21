@@ -1363,6 +1363,7 @@ dependencies = [
  "ed25519-dalek",
  "futures",
  "serde",
+ "sha2",
  "snow",
  "thiserror 2.0.18",
 ]

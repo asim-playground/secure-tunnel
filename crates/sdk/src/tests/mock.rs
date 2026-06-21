@@ -90,6 +90,10 @@ impl MockPorts {
     pub(super) fn close_count(&self) -> usize {
         lock(&self.quic.state.closes).len()
     }
+
+    pub(super) fn connect_count(&self) -> usize {
+        *lock(&self.quic.connects) + *lock(&self.wss.connects)
+    }
 }
 
 impl TransportPorts for MockPorts {
@@ -110,6 +114,7 @@ struct MockConnector {
     carrier: secure_tunnel_core::CarrierKind,
     outcomes: Mutex<VecDeque<secure_tunnel_core::ApiResult<()>>>,
     state: Arc<MockDuplexState>,
+    connects: Arc<Mutex<usize>>,
     cancellation: Option<CancellationHandle>,
 }
 
@@ -126,6 +131,7 @@ impl MockConnector {
             carrier,
             outcomes: Mutex::new(VecDeque::from([Ok(())])),
             state: Arc::new(MockDuplexState::new(receives, 0)),
+            connects: Arc::new(Mutex::new(0)),
             cancellation: None,
         }
     }
@@ -135,6 +141,7 @@ impl MockConnector {
             carrier,
             outcomes: Mutex::new(VecDeque::from([Ok(())])),
             state: Arc::new(MockDuplexState::new([], 1)),
+            connects: Arc::new(Mutex::new(0)),
             cancellation: None,
         }
     }
@@ -147,6 +154,7 @@ impl MockConnector {
             carrier,
             outcomes: Mutex::new(VecDeque::from([Ok(())])),
             state: Arc::new(MockDuplexState::new([], 0)),
+            connects: Arc::new(Mutex::new(0)),
             cancellation: Some(cancellation),
         }
     }
@@ -159,6 +167,7 @@ impl MockConnector {
             carrier,
             outcomes: Mutex::new(VecDeque::from([Err(error)])),
             state: Arc::new(MockDuplexState::new([], 0)),
+            connects: Arc::new(Mutex::new(0)),
             cancellation: None,
         }
     }
@@ -176,6 +185,7 @@ impl secure_tunnel_core::CarrierConnector for MockConnector {
         'a,
         secure_tunnel_core::ApiResult<Box<dyn secure_tunnel_core::FramedDuplex>>,
     > {
+        *lock(&self.connects) += 1;
         let result = lock(&self.outcomes).pop_front().unwrap_or(Ok(()));
         let carrier = target.carrier();
         let state = self.state.clone();
@@ -224,8 +234,9 @@ impl secure_tunnel_core::SecureReadyEvaluator for MockSecureReadyEvaluator {
             result.map(|()| secure_tunnel_core::SecureReadyTransport {
                 transport,
                 artifacts: secure_tunnel_core::SecureReadyArtifacts {
-                    handshake_hash: Some(vec![0xAA, 0xBB]),
-                    channel_binding: Some(vec![0xCC]),
+                    handshake_hash: Some(vec![0xAA; 32]),
+                    channel_binding: Some(vec![0xCC; 32]),
+                    service_static_public_key: Some(vec![0xDD; 32]),
                 },
             })
         })

@@ -22,13 +22,14 @@ one carrier-independent control payload such as the encrypted close message.
 
 The state reached only after the outer carrier is established, the framed
 record channel is available, the Noise handshake completes successfully, the
-server-key authorization validates, and both peers enter Noise transport mode.
+descriptor-authorized service static public key validates, and both peers enter
+Noise transport mode.
 
 ## Service Identity
 
 The logical backend identity authenticated by the inner channel. In v1 it is
 the combination of service identifier, environment identifier, and authorized
-server Noise static key.
+service Noise static public key.
 
 ## Service Descriptor
 

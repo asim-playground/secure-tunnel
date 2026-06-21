@@ -5,10 +5,15 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
+use base64::Engine;
+
 use crate::{
-    ApiError, CandidateSource, CarrierKind, FallbackReason, TransportCacheSnapshot,
+    ApiError, CandidateSource, CarrierKind, FallbackReason, NOISE_SUITE_V1, PRODUCT_LABEL_V1,
+    PROLOGUE_DOMAIN_V1, TransportCacheSnapshot, example_descriptor_trust_anchors,
     example_service_descriptor,
 };
+
+const VALID_NOW: u64 = 1_742_000_000;
 
 #[test]
 fn connect_plan_prefers_quic_on_unknown_network() {
@@ -29,10 +34,11 @@ fn connect_plan_uses_only_wss_when_quic_bad_cache_is_active() {
     let cache = TransportCacheSnapshot {
         last_successful_carrier: Some(CarrierKind::Wss),
         last_quic_failure: Some(FallbackReason::OuterPathFailure),
-        next_quic_probe_after_unix_seconds: Some(2_000),
+        next_quic_probe_after_unix_seconds: Some(VALID_NOW + 1),
+        highest_descriptor_serial: Some(1),
     };
 
-    let plan = descriptor.connect_plan(Some(&cache), 1_999).unwrap();
+    let plan = descriptor.connect_plan(Some(&cache), VALID_NOW).unwrap();
 
     assert_eq!(plan.len(), 1);
     assert_eq!(plan[0].target.carrier(), CarrierKind::Wss);
@@ -47,10 +53,13 @@ fn connect_plan_fails_fast_when_cache_blocks_quic_and_fallback_is_disabled() {
     let cache = TransportCacheSnapshot {
         last_successful_carrier: None,
         last_quic_failure: Some(FallbackReason::OuterPathFailure),
-        next_quic_probe_after_unix_seconds: Some(2_000),
+        next_quic_probe_after_unix_seconds: Some(VALID_NOW + 1),
+        highest_descriptor_serial: Some(1),
     };
 
-    let error = descriptor.connect_plan(Some(&cache), 1_999).unwrap_err();
+    let error = descriptor
+        .connect_plan(Some(&cache), VALID_NOW)
+        .unwrap_err();
 
     assert_eq!(
         error,
@@ -66,15 +75,51 @@ fn connect_plan_reprobes_quic_after_cache_deadline() {
     let cache = TransportCacheSnapshot {
         last_successful_carrier: Some(CarrierKind::Wss),
         last_quic_failure: Some(FallbackReason::OuterPathFailure),
-        next_quic_probe_after_unix_seconds: Some(2_000),
+        next_quic_probe_after_unix_seconds: Some(VALID_NOW),
+        highest_descriptor_serial: Some(1),
     };
 
-    let plan = descriptor.connect_plan(Some(&cache), 2_000).unwrap();
+    let plan = descriptor.connect_plan(Some(&cache), VALID_NOW).unwrap();
 
     assert_eq!(plan[0].target.carrier(), CarrierKind::Quic);
     assert_eq!(
         plan[0].source,
         CandidateSource::QuicReprobeAfterCachedFallback
+    );
+}
+
+#[test]
+fn connect_plan_rejects_expired_descriptor() {
+    let mut descriptor = example_service_descriptor();
+    descriptor.not_after = "2024-01-02T00:00:00Z".to_owned();
+
+    let error = descriptor.connect_plan(None, VALID_NOW).unwrap_err();
+
+    assert_eq!(
+        error,
+        ApiError::InvalidServiceDescriptor("descriptor is outside its validity window")
+    );
+}
+
+#[test]
+fn connect_plan_rejects_serial_rollback() {
+    let descriptor = example_service_descriptor();
+    let cache = TransportCacheSnapshot {
+        last_successful_carrier: Some(CarrierKind::Quic),
+        last_quic_failure: None,
+        next_quic_probe_after_unix_seconds: None,
+        highest_descriptor_serial: Some(2),
+    };
+
+    let error = descriptor
+        .connect_plan(Some(&cache), VALID_NOW)
+        .unwrap_err();
+
+    assert_eq!(
+        error,
+        ApiError::InvalidServiceDescriptor(
+            "descriptor_serial is older than the cached accepted descriptor"
+        )
     );
 }
 
@@ -181,16 +226,99 @@ fn validate_rejects_invalid_trust_anchor_public_key() {
 }
 
 #[test]
+fn validate_rejects_invalid_service_static_public_key() {
+    let mut descriptor = example_service_descriptor();
+    descriptor.service_static_public_key = "<base64>".to_owned();
+
+    let error = descriptor.validate().unwrap_err();
+
+    assert_eq!(
+        error,
+        ApiError::InvalidServiceDescriptor(
+            "service_static_public_key must be base64-encoded 32-byte public key"
+        )
+    );
+}
+
+#[test]
+fn validate_rejects_invalid_signed_descriptor_hash() {
+    let mut descriptor = example_service_descriptor();
+    descriptor.signed_descriptor_hash = "<base64>".to_owned();
+
+    let error = descriptor.validate().unwrap_err();
+
+    assert_eq!(
+        error,
+        ApiError::InvalidServiceDescriptor(
+            "signed_descriptor_hash must be base64-encoded 32-byte hash"
+        )
+    );
+}
+
+#[test]
+fn authorize_at_accepts_signed_example_descriptor() {
+    let descriptor = example_service_descriptor();
+
+    descriptor
+        .authorize_at(VALID_NOW, &example_descriptor_trust_anchors())
+        .unwrap();
+}
+
+#[test]
+fn authorize_at_rejects_unpinned_descriptor_root() {
+    let descriptor = example_service_descriptor();
+
+    let error = descriptor.authorize_at(VALID_NOW, &[]).unwrap_err();
+
+    assert_eq!(
+        error,
+        ApiError::InvalidServiceDescriptor(
+            "at least one pinned descriptor trust anchor is required"
+        )
+    );
+}
+
+#[test]
+fn authorize_at_rejects_tampered_service_static_key() {
+    let mut descriptor = example_service_descriptor();
+    descriptor.service_static_public_key =
+        base64::engine::general_purpose::STANDARD.encode([8_u8; 32]);
+
+    let error = descriptor
+        .authorize_at(VALID_NOW, &example_descriptor_trust_anchors())
+        .unwrap_err();
+
+    assert_eq!(
+        error,
+        ApiError::InvalidServiceDescriptor(
+            "signed_descriptor_hash must match the canonical descriptor body"
+        )
+    );
+}
+
+#[test]
 fn noise_prologue_uses_canonical_field_order_and_length_prefixes() {
     let descriptor = example_service_descriptor();
 
     let prologue = descriptor.noise_prologue().unwrap();
-    let expected = [
-        0x00, 0x10, b's', b'e', b'c', b'u', b'r', b'e', b'-', b't', b'u', b'n', b'n', b'e', b'l',
-        b'-', b'v', b'1', 0x00, 0x04, b'p', b'r', b'o', b'd', 0x00, 0x11, b's', b'e', b'c', b'u',
-        b'r', b'e', b'-', b't', b'u', b'n', b'n', b'e', b'l', b'-', b'a', b'p', b'i', 0x00, 0x0f,
-        b'a', b'p', b'i', b'.', b'e', b'x', b'a', b'm', b'p', b'l', b'e', b'.', b'c', b'o', b'm',
-    ];
+    let mut expected = Vec::new();
+    expected.extend_from_slice(PROLOGUE_DOMAIN_V1);
+    push_string(&mut expected, PRODUCT_LABEL_V1);
+    expected.extend_from_slice(&1_u16.to_be_bytes());
+    push_string(&mut expected, "secure-tunnel-api");
+    push_string(&mut expected, "prod");
+    push_string(&mut expected, "api.example.com");
+    expected.extend_from_slice(&descriptor.signed_descriptor_hash_bytes().unwrap());
+    push_string(&mut expected, NOISE_SUITE_V1);
 
     assert_eq!(prologue, expected);
+}
+
+fn push_string(out: &mut Vec<u8>, value: &str) {
+    let len = match u16::try_from(value.len()) {
+        Ok(len) => len,
+        Err(error) => panic!("test string should fit in u16: {error}"),
+    };
+    out.extend_from_slice(&len.to_be_bytes());
+    out.extend_from_slice(value.as_bytes());
 }

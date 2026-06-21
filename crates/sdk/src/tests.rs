@@ -19,8 +19,9 @@ use crate::client::SecureTunnelClient;
 use crate::error::{ConnectError, SdkErrorKind};
 use crate::planning::connect_plan_report;
 use crate::{
-    BootstrapDescriptor, CacheDisposition, CancellationHandle, Carrier, ClientConfig,
-    ConnectOptions, FallbackReason, SessionState, TransportAttemptOutcome,
+    AccountAuthMode, AccountAuthRequest, AccountFreshness, BootstrapDescriptor, CacheDisposition,
+    CancellationHandle, Carrier, ClientConfig, ConnectOptions, FallbackReason, SessionState,
+    TransportAttemptOutcome,
 };
 use mock::MockPorts;
 
@@ -80,8 +81,12 @@ fn connect_success_returns_session_and_report() {
         outcome.report.attempts[0].outcome,
         TransportAttemptOutcome::SecureReady
     );
-    assert_eq!(outcome.artifacts.handshake_hash, Some(vec![0xAA, 0xBB]));
-    assert_eq!(outcome.artifacts.channel_binding, Some(vec![0xCC]));
+    assert_eq!(outcome.artifacts.handshake_hash, Some(vec![0xAA; 32]));
+    assert_eq!(outcome.artifacts.channel_binding, Some(vec![0xCC; 32]));
+    assert_eq!(
+        outcome.artifacts.service_static_public_key,
+        Some(vec![0xDD; 32])
+    );
 }
 
 #[test]
@@ -126,6 +131,37 @@ fn inner_trust_failure_maps_to_stable_error() {
             message: "inner trust check failed".to_owned()
         }
     );
+}
+
+#[test]
+fn invalid_descriptor_signature_does_not_dial_carrier() {
+    let ports = Arc::new(MockPorts::quic_success());
+    let client = SecureTunnelClient::with_ports(ClientConfig::default(), ports.clone());
+    let descriptor = tampered_endpoint_descriptor();
+
+    let error = connect_error_value(block_on(
+        client.connect(ConnectOptions::new(descriptor, 1_742_000_000)),
+    ));
+
+    assert_eq!(error.kind(), SdkErrorKind::InvalidDescriptor);
+    assert!(error.attempts.is_empty());
+    assert_eq!(ports.connect_count(), 0);
+}
+
+#[test]
+fn unpinned_service_static_key_does_not_dial_carrier() {
+    let ports = Arc::new(MockPorts::quic_success());
+    let config = ClientConfig::default().with_pinned_service_static_public_keys(vec![[8_u8; 32]]);
+    let client = SecureTunnelClient::with_ports(config, ports.clone());
+    let descriptor = example_descriptor();
+
+    let error = connect_error_value(block_on(
+        client.connect(ConnectOptions::new(descriptor, 1_742_000_000)),
+    ));
+
+    assert_eq!(error.kind(), SdkErrorKind::InnerTrustFailure);
+    assert!(error.attempts.is_empty());
+    assert_eq!(ports.connect_count(), 0);
 }
 
 #[test]
@@ -174,6 +210,191 @@ fn session_send_receive_request_and_close_use_mock_transport() {
 }
 
 #[test]
+fn account_authentication_advances_session_state() {
+    let ports = Arc::new(MockPorts::quic_success_with_receives([Some(
+        account_result(AccountFreshness::Fresh),
+    )]));
+    let client = SecureTunnelClient::with_ports(ClientConfig::default(), ports.clone());
+    let descriptor = example_descriptor();
+    let outcome = result_value(block_on(
+        client.connect(ConnectOptions::new(descriptor, 1_742_000_000)),
+    ));
+
+    let report = result_value(block_on(outcome.session.authenticate_account(
+        AccountAuthRequest {
+            account_id: "acct-1".to_owned(),
+            credential_payload: vec![1, 2, 3],
+            mode: AccountAuthMode::Fresh,
+        },
+    )));
+
+    assert_eq!(report.account_id, "acct-1");
+    assert_eq!(report.freshness, AccountFreshness::Fresh);
+    assert_eq!(outcome.session.state(), SessionState::AccountAuthenticated);
+    assert_eq!(ports.sent_records().len(), 1);
+    let sent = secure_tunnel_core::AccountAuthRequest::decode(&ports.sent_records()[0]).unwrap();
+    assert_eq!(sent.account_id, "acct-1");
+}
+
+#[test]
+fn known_device_authentication_consumes_pending_challenge() {
+    let ports = Arc::new(MockPorts::quic_success_with_receives([
+        Some(account_result(AccountFreshness::Fresh)),
+        Some(device_auth_challenge()),
+        Some(device_auth_result()),
+    ]));
+    let client = SecureTunnelClient::with_ports(ClientConfig::default(), ports.clone());
+    let descriptor = example_descriptor();
+    let outcome = result_value(block_on(
+        client.connect(ConnectOptions::new(descriptor, 1_742_000_000)),
+    ));
+    result_value(block_on(outcome.session.authenticate_account(
+        AccountAuthRequest {
+            account_id: "acct-1".to_owned(),
+            credential_payload: vec![1],
+            mode: AccountAuthMode::Fresh,
+        },
+    )));
+
+    let challenge = result_value(block_on(
+        outcome
+            .session
+            .begin_known_device_auth("device-ed25519-1".to_owned()),
+    ));
+    assert!(!challenge.canonical_bytes.is_empty());
+    let report = result_value(block_on(outcome.session.finish_known_device_auth(
+        challenge.clone(),
+        vec![7_u8; 64],
+        1_760_000_000_000,
+    )));
+
+    assert_eq!(report.device_key_id, "device-ed25519-1");
+    assert_eq!(
+        outcome.session.state(),
+        SessionState::KnownDeviceAuthenticated
+    );
+    let replay = error_value(block_on(outcome.session.finish_known_device_auth(
+        challenge,
+        vec![7_u8; 64],
+        1_760_000_000_000,
+    )));
+    assert_eq!(replay.kind(), SdkErrorKind::AuthFailure);
+    assert_eq!(ports.sent_records().len(), 3);
+}
+
+#[test]
+fn known_device_authentication_rejects_mismatched_result_device() {
+    let ports = Arc::new(MockPorts::quic_success_with_receives([
+        Some(account_result(AccountFreshness::Fresh)),
+        Some(device_auth_challenge()),
+        Some(device_auth_result_for("device-other")),
+    ]));
+    let client = SecureTunnelClient::with_ports(ClientConfig::default(), ports);
+    let descriptor = example_descriptor();
+    let outcome = result_value(block_on(
+        client.connect(ConnectOptions::new(descriptor, 1_742_000_000)),
+    ));
+    result_value(block_on(outcome.session.authenticate_account(
+        AccountAuthRequest {
+            account_id: "acct-1".to_owned(),
+            credential_payload: vec![1],
+            mode: AccountAuthMode::Fresh,
+        },
+    )));
+    let challenge = result_value(block_on(
+        outcome
+            .session
+            .begin_known_device_auth("device-ed25519-1".to_owned()),
+    ));
+
+    let error = error_value(block_on(outcome.session.finish_known_device_auth(
+        challenge,
+        vec![7_u8; 64],
+        1_760_000_000_000,
+    )));
+
+    assert_eq!(error.kind(), SdkErrorKind::AuthFailure);
+    assert_eq!(outcome.session.state(), SessionState::AccountAuthenticated);
+}
+
+#[test]
+fn resumed_account_cannot_enroll_new_device() {
+    let ports = Arc::new(MockPorts::quic_success_with_receives([Some(
+        account_result(AccountFreshness::Resumed),
+    )]));
+    let client = SecureTunnelClient::with_ports(ClientConfig::default(), ports);
+    let descriptor = example_descriptor();
+    let outcome = result_value(block_on(
+        client.connect(ConnectOptions::new(descriptor, 1_742_000_000)),
+    ));
+    result_value(block_on(outcome.session.authenticate_account(
+        AccountAuthRequest {
+            account_id: "acct-1".to_owned(),
+            credential_payload: vec![1],
+            mode: AccountAuthMode::Resume,
+        },
+    )));
+
+    let error = error_value(block_on(
+        outcome
+            .session
+            .begin_device_enrollment("device-ed25519-2".to_owned(), vec![9_u8; 32]),
+    ));
+
+    assert_eq!(error.kind(), SdkErrorKind::AuthFailure);
+    assert_eq!(outcome.session.state(), SessionState::AccountAuthenticated);
+}
+
+#[test]
+fn device_enrollment_rejects_mismatched_result_device() {
+    let ports = Arc::new(MockPorts::quic_success_with_receives([
+        Some(account_result(AccountFreshness::Fresh)),
+        Some(
+            secure_tunnel_core::DeviceChallenge {
+                server_challenge: [5_u8; 32],
+                expires_at_unix_ms: 1_760_000_010_000,
+            }
+            .encode_enrollment()
+            .unwrap(),
+        ),
+        Some(
+            secure_tunnel_core::DeviceResult {
+                device_key_id: "device-other".to_owned(),
+                state: secure_tunnel_core::DeviceState::Pending,
+            }
+            .encode_enrollment()
+            .unwrap(),
+        ),
+    ]));
+    let client = SecureTunnelClient::with_ports(ClientConfig::default(), ports);
+    let descriptor = example_descriptor();
+    let outcome = result_value(block_on(
+        client.connect(ConnectOptions::new(descriptor, 1_742_000_000)),
+    ));
+    result_value(block_on(outcome.session.authenticate_account(
+        AccountAuthRequest {
+            account_id: "acct-1".to_owned(),
+            credential_payload: vec![1],
+            mode: AccountAuthMode::Fresh,
+        },
+    )));
+    let challenge = result_value(block_on(
+        outcome
+            .session
+            .begin_device_enrollment("device-ed25519-2".to_owned(), vec![9_u8; 32]),
+    ));
+
+    let error = error_value(block_on(outcome.session.finish_device_enrollment(
+        challenge,
+        vec![7_u8; 64],
+        1_760_000_000_000,
+    )));
+
+    assert_eq!(error.kind(), SdkErrorKind::AuthFailure);
+    assert_eq!(outcome.session.state(), SessionState::AccountAuthenticated);
+}
+
+#[test]
 fn dropped_pending_session_send_restores_transport() {
     let ports = Arc::new(MockPorts::quic_success_with_pending_send());
     let client = SecureTunnelClient::with_ports(ClientConfig::default(), ports.clone());
@@ -200,6 +421,51 @@ fn dropped_pending_session_send_restores_transport() {
 fn example_descriptor() -> BootstrapDescriptor {
     let descriptor_json = result_value(BootstrapDescriptor::example_json());
     result_value(BootstrapDescriptor::from_json(&descriptor_json))
+}
+
+fn tampered_endpoint_descriptor() -> BootstrapDescriptor {
+    let descriptor_json = result_value(BootstrapDescriptor::example_json()).replace(
+        "\"connect_host\":\"api.example.com\"",
+        "\"connect_host\":\"evil.example.com\"",
+    );
+    result_value(BootstrapDescriptor::from_json(&descriptor_json))
+}
+
+fn account_result(freshness: AccountFreshness) -> Vec<u8> {
+    let freshness = match freshness {
+        AccountFreshness::Fresh => secure_tunnel_core::AccountFreshness::Fresh,
+        AccountFreshness::Resumed => secure_tunnel_core::AccountFreshness::Resumed,
+    };
+    secure_tunnel_core::AccountAuthResult {
+        account_id: "acct-1".to_owned(),
+        session_context_id: "session-1".to_owned(),
+        account_context_hash: [4_u8; 32],
+        freshness,
+    }
+    .encode()
+    .unwrap()
+}
+
+fn device_auth_challenge() -> Vec<u8> {
+    secure_tunnel_core::DeviceChallenge {
+        server_challenge: [5_u8; 32],
+        expires_at_unix_ms: 1_760_000_010_000,
+    }
+    .encode_auth()
+    .unwrap()
+}
+
+fn device_auth_result() -> Vec<u8> {
+    device_auth_result_for("device-ed25519-1")
+}
+
+fn device_auth_result_for(device_key_id: &str) -> Vec<u8> {
+    secure_tunnel_core::DeviceResult {
+        device_key_id: device_key_id.to_owned(),
+        state: secure_tunnel_core::DeviceState::Active,
+    }
+    .encode_auth()
+    .unwrap()
 }
 
 fn result_value<T, E: std::fmt::Debug>(result: Result<T, E>) -> T {

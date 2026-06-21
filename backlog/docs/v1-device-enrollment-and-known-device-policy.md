@@ -50,14 +50,14 @@ In v1, a device key does not prove:
 
 - Private key location: server-side or offline signing system only
 - Public key location: shipped in the client bootstrap material
-- Purpose: signs server-key authorization objects and signed descriptor updates
+- Purpose: signs descriptor updates when the deployment uses signed updates
 - Used by client for verification only, never for client-originated signatures
 
-### Server Noise Static Keypair
+### Service Noise Static Keypair
 
 - Private key location: backend service instance or secure key service
-- Public key location: distributed to the client only through the signed
-  server-key authorization object
+- Public key location: descriptor-pinned bootstrap material in the current v1
+  implementation slice; signed descriptor updates may rotate it later
 - Purpose: authenticates the backend in the Noise handshake
 - Never reused for device-auth or enrollment signatures
 
@@ -167,7 +167,7 @@ By default, reinstalling the app creates a new device identity. Reusing an old
 
 - connection is in `Account Authenticated (fresh)`
 - the server-defined fresh-auth window for enrollment has not expired
-- server Noise identity has already been verified
+- service Noise identity has already been verified
 - the client has a candidate device signing keypair available, or can generate
   one before sending the enrollment proof
 
@@ -176,18 +176,21 @@ By default, reinstalling the app creates a new device identity. Reusing an old
 1. Client creates or loads a device signing key.
 2. Client sends a request to begin enrollment over Noise transport.
 3. Server returns an enrollment challenge containing at least:
-   - `server_nonce`
+   - `server_challenge`
    - `account_id`
    - optional enrollment policy hints
    - optional attestation request fields
 4. Client signs, using the candidate device private signing key, an enrollment
    statement that binds:
-   - `device-enroll-v1`
+   - `secure-tunnel-device-proof-v1\0`
    - final Noise handshake hash `h`
-   - `server_nonce`
-   - `account_id`
-   - `device_public_key`
-   - optional expiry or issued-at value
+   - `server_challenge`
+   - service/environment/authority
+   - signed descriptor hash
+   - account context hash
+   - device key id
+   - enrollment purpose code
+   - expiry
 5. Client sends the enrollment proof plus optional attestation evidence.
 6. Server verifies the signature, channel binding, nonce freshness, and any
    configured policy checks.
@@ -222,20 +225,22 @@ By default, reinstalling the app creates a new device identity. Reusing an old
    enough to pin the target `account_id` and server-side session context for
    this reconnect attempt.
 3. Server returns a challenge containing at least:
-   - `server_nonce`
+   - `server_challenge`
    - `device_id`
    - pinned `account_id`
    - pinned server-side session context identifier
    - short-lived freshness data such as timestamp or expiry
 4. Client signs, using the enrolled device private signing key already bound to
    that `device_id`, a device-auth statement that binds:
-   - `device-auth-v1`
+   - `secure-tunnel-device-proof-v1\0`
    - final Noise handshake hash `h`
-   - `server_nonce`
-   - `device_id`
-   - pinned `account_id`
-   - pinned server-side session context identifier
-   - freshness data if applicable
+   - `server_challenge`
+   - service/environment/authority
+   - signed descriptor hash
+   - account context hash
+   - device key id
+   - known-device reauth purpose code
+   - expiry
 5. Server verifies the signature against the enrolled public key, confirms
    freshness, and checks that the signed account or session context matches the
    pinned reconnect context.

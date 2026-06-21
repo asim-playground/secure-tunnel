@@ -36,7 +36,7 @@ A transport attempt counts as successful only when it reaches `Secure Ready`.
   - WebSocket subprotocol for `WSS`
 - the framed record channel is available
 - the Noise handshake completed successfully
-- the server-key authorization validated successfully
+- the descriptor-authorized service static public key validated successfully
 - the prologue-bound environment, service identity, and service authority match
   the expected bootstrap context
 - both peers entered Noise transport mode
@@ -102,7 +102,7 @@ The cache must not store:
 | `outer_quic_rejected` | ALPN mismatch, version rejection, Retry exhaustion before inner trust | `yes` |
 | `outer_quic_closed_early` | QUIC connection or stream closes before `Secure Ready` | `yes` |
 | `inner_noise_failure` | malformed Noise message, handshake processing failure | `no` |
-| `inner_trust_failure` | invalid signature, expired server-key authorization, wrong service identity | `no` |
+| `inner_trust_failure` | unexpected handshake payload, unauthorized service static key, wrong service identity | `no` |
 | `post_handshake_auth_failure` | login rejected, device challenge rejected, enrollment denied | `no` |
 
 The default v1 policy allows fallback for `QUIC` ALPN or version rejection only
@@ -143,6 +143,6 @@ Minimum validation should cover:
 - `QUIC` success without fallback
 - forced `WSS` fallback on UDP-blocked path
 - fallback after `QUIC` ALPN or version rejection
-- rejection without fallback on invalid server-key authorization
+- rejection without fallback on invalid service static key authorization
 - rejection without fallback on mismatched service identity
 - rejection without fallback on post-handshake login or device-auth failure

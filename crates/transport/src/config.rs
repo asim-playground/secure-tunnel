@@ -12,12 +12,17 @@ use rustls::crypto::ring::default_provider;
 use rustls::pki_types::CertificateDer;
 use rustls::{ClientConfig, RootCertStore};
 use rustls_platform_verifier::BuilderVerifierExt;
-use secure_tunnel_core::{ApiError, ApiResult, CarrierKind};
+use secure_tunnel_core::{
+    ApiError, ApiResult, CarrierKind, NoisePublicKey, TrustAnchor,
+    example_descriptor_trust_anchors, obfuscated_service_static_public_key,
+};
 
 /// TLS verifier configuration shared by the production carrier adapters.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct TransportClientConfig {
     root_certificates_der: Option<Vec<Vec<u8>>>,
+    descriptor_trust_anchors: Vec<TrustAnchor>,
+    pinned_service_static_public_keys: Vec<NoisePublicKey>,
 }
 
 impl TransportClientConfig {
@@ -26,6 +31,8 @@ impl TransportClientConfig {
     pub const fn platform_verifier() -> Self {
         Self {
             root_certificates_der: None,
+            descriptor_trust_anchors: Vec::new(),
+            pinned_service_static_public_keys: Vec::new(),
         }
     }
 
@@ -37,7 +44,31 @@ impl TransportClientConfig {
     pub const fn with_root_certificate_der(root_certificates_der: Vec<Vec<u8>>) -> Self {
         Self {
             root_certificates_der: Some(root_certificates_der),
+            descriptor_trust_anchors: Vec::new(),
+            pinned_service_static_public_keys: Vec::new(),
         }
+    }
+
+    /// Sets pinned descriptor roots for service descriptor authorization.
+    #[must_use]
+    pub fn with_descriptor_trust_anchors(mut self, anchors: Vec<TrustAnchor>) -> Self {
+        self.descriptor_trust_anchors = anchors;
+        self
+    }
+
+    /// Sets pinned service static public keys accepted by the `NK1` handshake.
+    #[must_use]
+    pub fn with_pinned_service_static_public_keys(mut self, keys: Vec<NoisePublicKey>) -> Self {
+        self.pinned_service_static_public_keys = keys;
+        self
+    }
+
+    pub(crate) fn descriptor_trust_anchors(&self) -> Vec<TrustAnchor> {
+        self.descriptor_trust_anchors.clone()
+    }
+
+    pub(crate) fn pinned_service_static_public_keys(&self) -> Vec<NoisePublicKey> {
+        self.pinned_service_static_public_keys.clone()
     }
 
     pub(crate) fn quic_client_config(&self, alpn: &str) -> ApiResult<quinn::ClientConfig> {
@@ -62,6 +93,16 @@ impl TransportClientConfig {
                 .with_platform_verifier()
                 .map_err(|_| ApiError::OuterTlsFailure(carrier))?;
             Ok(builder.with_no_client_auth())
+        }
+    }
+}
+
+impl Default for TransportClientConfig {
+    fn default() -> Self {
+        Self {
+            root_certificates_der: None,
+            descriptor_trust_anchors: example_descriptor_trust_anchors(),
+            pinned_service_static_public_keys: vec![obfuscated_service_static_public_key()],
         }
     }
 }

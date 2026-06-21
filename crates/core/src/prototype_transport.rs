@@ -8,7 +8,7 @@
 //! Test-only prototype QUIC and WSS transport bindings.
 //!
 //! This module keeps the task-00000012 prototype local to `crates/core` by
-//! combining the real `SnowNxClientEvaluator` with in-memory carrier adapters
+//! combining the real `SnowNk1ClientEvaluator` with in-memory carrier adapters
 //! that validate carrier-specific selector values, record connection metrics,
 //! and expose one bidirectional framed channel per successful carrier.
 

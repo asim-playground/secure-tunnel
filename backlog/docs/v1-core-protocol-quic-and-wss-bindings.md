@@ -46,7 +46,7 @@ start with the same string value:
 - protocol id: `secure-tunnel-v1`
 - `QUIC` ALPN: `secure-tunnel-v1`
 - `WSS` subprotocol: `secure-tunnel-v1`
-- Noise suite: `Noise_NX_25519_ChaChaPoly_BLAKE2s`
+- Noise suite: `Noise_NK1_25519_ChaChaPoly_BLAKE2s`
 
 The identifiers may evolve independently in later versions. Implementations
 must not assume that "same string today" means "same identifier kind forever."
@@ -57,7 +57,7 @@ The v1 stack is:
 
 1. selected outer carrier
 2. framed record channel
-3. Noise `NX` handshake
+3. Noise `NK1` handshake with client-authorized service static public key
 4. Noise transport messages
 5. application session messages such as login and device auth
 
@@ -100,45 +100,49 @@ it from the service descriptor, not from the carrier.
 
 V1 prologue fields:
 
-- protocol id
-- environment id
+- domain label `secure-tunnel-inner-prologue-v1\0`
+- product label `secure-tunnel`
+- inner protocol version `1`
 - service id
+- environment id
 - service authority
+- signed descriptor hash
+- allowed Noise suite
 
 The prologue must not include `transport=quic` or `transport=wss`.
 
-## Server-Key Authorization
+## Service Static Public Key Authorization
 
-### Placement
+The descriptor carries the service Noise static public key as public identity
+material for the current implementation slice. The service static private key
+stays server-only.
 
-The responder's Noise handshake payload is the server-key authorization object.
-It is carried inside the responder's Noise handshake message, not as framed
-sidecar metadata.
+The client supplies the authorized service static public key to the `NK1`
+initiator before sending the first Noise message. The responder handshake
+payload must be empty; application requests, account identifiers, device
+identifiers, and proof material are forbidden during the handshake.
 
 ### Required Fields
 
-The serialized `server_key_authorization_v1` payload must cover at least:
+The descriptor-bound identity input must cover at least:
 
-- server Noise public key
-- key identifier
-- not-before timestamp
-- not-after timestamp
 - environment id
 - service id
 - service authority
-- protocol id or compatibility marker
-- trust-anchor signature authorizing the above fields
+- service Noise static public key
+- signed descriptor hash
+- allowed Noise suite
 
 ### Validation Rules
 
 The client must reject the connection if:
 
-- the trust-anchor signature is invalid
-- the presented server Noise key does not match the authorized key in the
-  payload
-- the authorization is expired or not yet valid
+- the descriptor service static public key is malformed or all zeroes
+- the descriptor hash is malformed or all zeroes
 - the environment id, service id, or service authority do not match the
   expected prologue context
+- the responder sends any Noise handshake payload
+- Noise message processing fails with the configured service static public key
 
 Trust validation completes before the session may enter `Secure Ready`.
 
@@ -157,14 +161,14 @@ No application credentials or device proofs may be sent here.
 
 ### State 1: Noise Handshake In Progress
 
-The client starts the `NX` initiator handshake and sends one Noise handshake
-record. The server replies with one responder handshake record whose handshake
-payload contains `server_key_authorization_v1`.
+The client starts the `NK1` initiator handshake with the descriptor-authorized
+service static public key and sends one Noise handshake record. The server
+replies with one responder handshake record with an empty handshake payload.
 
 The client validates:
 
 - Noise message processing succeeded
-- server-key authorization succeeded
+- service static public key authorization succeeded
 - prologue-bound identity fields match expectation
 
 If validation fails, the connection must be aborted without entering transport
@@ -375,8 +379,9 @@ Minimum behavior:
 
 The first implementation slices must verify at least:
 
-- a connection cannot reach `Secure Ready` without successful server-key
-  authorization
+- a connection cannot reach `Secure Ready` unless the descriptor signature,
+  descriptor freshness, serial rollback check, and pinned service static public
+  key authorization all succeed
 - login messages cannot be processed before Noise transport mode
 - device enrollment cannot happen before `Account Authenticated (fresh)` unless
   explicit step-up policy says otherwise

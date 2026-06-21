@@ -46,7 +46,7 @@ Owns:
 - framed record semantics and size limits
 - Noise handshake and transport state machine
 - prologue construction from the service descriptor
-- trust-anchor validation and server-key authorization checks
+- service static public key authorization checks
 - secure-ready state transitions
 - encrypted close semantics and channel-binding outputs
 
@@ -178,9 +178,9 @@ Verify locally:
 
 Build:
 
-- Noise `NX` handshake driver over `FramedDuplex`
+- Noise handshake driver over `FramedDuplex`
 - prologue construction from `ServiceDescriptor`
-- trust-anchor and server-key authorization validation
+- service static public key authorization validation
 - secure-ready and encrypted-close reporting
 
 Verify locally:

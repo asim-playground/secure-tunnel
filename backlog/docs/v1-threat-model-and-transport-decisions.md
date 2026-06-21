@@ -17,7 +17,8 @@ carriers:
 - `WSS` over outer TLS is the compatibility fallback
 
 The outer carrier is an availability and reachability layer. The inner
-`Noise_NX_25519_ChaChaPoly_BLAKE2s` session is the end-to-end confidentiality
+`Noise_NK1_25519_ChaChaPoly_BLAKE2s` session, authenticated with the
+client-authorized service static public key, is the end-to-end confidentiality
 and integrity boundary.
 
 ## Product Context
@@ -120,11 +121,11 @@ after the channel reaches `Secure Ready`.
 
 ## Key Roles
 
-### Server Key
+### Service Key
 
-The server key is the backend's long-lived Noise static key for the secure
-channel. It is used only for Noise identity and is authorized by a shipped
-trust anchor.
+The service key is the backend's long-lived Noise static key for the secure
+channel. It is used only for Noise identity and is authorized by descriptor
+bootstrap material.
 
 ### Device Key
 
@@ -155,7 +156,7 @@ connection. They are per-connection and discarded when the session ends.
 
 ### Noise Pattern
 
-- V1 uses a server-auth pattern based on `NX`.
+- V1 uses a server-auth pattern based on `NK1`.
 - Returning-device variants that place client static identity inside the Noise
   handshake are deferred.
 
@@ -198,7 +199,7 @@ Fallback is allowed for examples such as:
 Fallback is not allowed for:
 
 - Noise handshake processing failure
-- invalid or expired server-key authorization
+- invalid service static public key authorization
 - wrong environment, service identity, or service authority
 - post-handshake login failure
 - device-auth or enrollment policy failure

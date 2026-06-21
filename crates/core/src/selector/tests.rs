@@ -18,6 +18,8 @@ use crate::{
     TransportTarget, example_service_descriptor,
 };
 
+const VALID_NOW: u64 = 1_742_000_000;
+
 #[test]
 fn selector_prefers_quic_on_unknown_network() {
     let descriptor = example_service_descriptor();
@@ -51,6 +53,7 @@ fn selector_prefers_quic_on_unknown_network() {
         selected.cache_snapshot.next_quic_probe_after_unix_seconds,
         None
     );
+    assert_eq!(selected.cache_snapshot.highest_descriptor_serial, Some(1));
     assert_eq!(selected.attempts.len(), 1);
     assert_eq!(
         selected.attempts[0].outcome,
@@ -100,6 +103,7 @@ fn selector_falls_back_to_wss_after_quic_outer_failure() {
         selected.cache_snapshot.next_quic_probe_after_unix_seconds,
         Some(1_742_000_300)
     );
+    assert_eq!(selected.cache_snapshot.highest_descriptor_serial, Some(1));
     assert_eq!(
         selected.attempts[0].outcome,
         TransportAttemptOutcome::Fallback(FallbackReason::OuterPathFailure)
@@ -118,7 +122,8 @@ fn selector_uses_cached_fallback_without_extending_deadline() {
     let cache = TransportCacheSnapshot {
         last_successful_carrier: Some(CarrierKind::Wss),
         last_quic_failure: Some(FallbackReason::OuterPathFailure),
-        next_quic_probe_after_unix_seconds: Some(2_000),
+        next_quic_probe_after_unix_seconds: Some(VALID_NOW + 1),
+        highest_descriptor_serial: Some(1),
     };
     let quic = MockConnector::succeeds(CarrierKind::Quic);
     let wss = MockConnector::succeeds(CarrierKind::Wss);
@@ -127,7 +132,7 @@ fn selector_uses_cached_fallback_without_extending_deadline() {
     let selected = block_on(TransportSelector::new(300).select(
         &descriptor,
         Some(&cache),
-        1_999,
+        VALID_NOW,
         TransportConnectors::new(Some(&quic), Some(&wss)),
         &evaluator,
     ))
@@ -153,7 +158,7 @@ fn selector_uses_cached_fallback_without_extending_deadline() {
     );
     assert_eq!(
         selected.cache_snapshot.next_quic_probe_after_unix_seconds,
-        Some(2_000)
+        Some(VALID_NOW + 1)
     );
     assert_eq!(quic.call_count(), 0);
     assert_eq!(wss.call_count(), 1);
@@ -165,7 +170,8 @@ fn selector_reprobes_quic_after_cache_expiry() {
     let cache = TransportCacheSnapshot {
         last_successful_carrier: Some(CarrierKind::Wss),
         last_quic_failure: Some(FallbackReason::OuterPathFailure),
-        next_quic_probe_after_unix_seconds: Some(2_000),
+        next_quic_probe_after_unix_seconds: Some(VALID_NOW),
+        highest_descriptor_serial: Some(1),
     };
     let quic = MockConnector::succeeds(CarrierKind::Quic);
     let wss = MockConnector::succeeds(CarrierKind::Wss);
@@ -174,7 +180,7 @@ fn selector_reprobes_quic_after_cache_expiry() {
     let selected = block_on(TransportSelector::new(300).select(
         &descriptor,
         Some(&cache),
-        2_000,
+        VALID_NOW,
         TransportConnectors::new(Some(&quic), Some(&wss)),
         &evaluator,
     ))
@@ -386,6 +392,7 @@ impl SecureReadyEvaluator for MockSecureReadyEvaluator {
                 artifacts: SecureReadyArtifacts {
                     handshake_hash: Some(vec![0xAA, 0xBB]),
                     channel_binding: Some(vec![0xCC]),
+                    service_static_public_key: Some(vec![0xDD; 32]),
                 },
             })
         })

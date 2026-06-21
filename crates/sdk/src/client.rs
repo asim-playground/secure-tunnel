@@ -20,10 +20,48 @@ use crate::reports::{
 use crate::session::SecureTunnelSession;
 
 /// SDK client configuration shared across connect attempts.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClientConfig {
     /// Transport selection policy.
     pub transport_policy: TransportPolicyConfig,
+    /// Pinned descriptor roots that may authorize service descriptors.
+    pub descriptor_trust_anchors: Vec<secure_tunnel_core::TrustAnchor>,
+    /// Pinned service static public keys accepted for the inner `NK1` channel.
+    pub pinned_service_static_public_keys: Vec<secure_tunnel_core::NoisePublicKey>,
+}
+
+impl ClientConfig {
+    /// Sets pinned descriptor roots for service descriptor authorization.
+    #[must_use]
+    pub fn with_descriptor_trust_anchors(
+        mut self,
+        anchors: Vec<secure_tunnel_core::TrustAnchor>,
+    ) -> Self {
+        self.descriptor_trust_anchors = anchors;
+        self
+    }
+
+    /// Sets pinned service static public keys accepted by the `NK1` handshake.
+    #[must_use]
+    pub fn with_pinned_service_static_public_keys(
+        mut self,
+        keys: Vec<secure_tunnel_core::NoisePublicKey>,
+    ) -> Self {
+        self.pinned_service_static_public_keys = keys;
+        self
+    }
+}
+
+impl Default for ClientConfig {
+    fn default() -> Self {
+        Self {
+            transport_policy: TransportPolicyConfig::default(),
+            descriptor_trust_anchors: secure_tunnel_core::example_descriptor_trust_anchors(),
+            pinned_service_static_public_keys: vec![
+                secure_tunnel_core::obfuscated_service_static_public_key(),
+            ],
+        }
+    }
 }
 
 /// Inputs for one connect attempt.
@@ -95,10 +133,8 @@ impl SecureTunnelClient {
     /// Creates an SDK client with the default configuration.
     #[must_use]
     pub fn new(config: ClientConfig) -> Self {
-        Self {
-            config,
-            ports: Arc::new(ProductionTransportPorts::default()),
-        }
+        let ports = Arc::new(ProductionTransportPorts::new(&config));
+        Self { config, ports }
     }
 
     /// Connects to the service described by the supplied descriptor.
@@ -115,6 +151,7 @@ impl SecureTunnelClient {
     /// transport selection starts, the error includes the attempt trace.
     pub async fn connect(&self, options: ConnectOptions) -> ConnectResult<ConnectOutcome> {
         Self::check_cancelled(options.cancellation.as_ref())?;
+        self.authorize_descriptor_for_network(&options.descriptor, options.now_unix_seconds)?;
         let core_cache = options
             .transport_cache
             .as_ref()
@@ -161,7 +198,7 @@ impl SecureTunnelClient {
         }
         let report = ConnectReport::from_selected(&selected);
         let artifacts = SecureChannelArtifacts::from_core(&selected.artifacts);
-        let session = SecureTunnelSession::from_selected(selected);
+        let session = SecureTunnelSession::from_selected(selected, options.descriptor);
         Ok(ConnectOutcome {
             session,
             report,
@@ -172,6 +209,31 @@ impl SecureTunnelClient {
     #[cfg(test)]
     pub(super) fn with_ports(config: ClientConfig, ports: Arc<dyn TransportPorts>) -> Self {
         Self { config, ports }
+    }
+
+    fn authorize_descriptor_for_network(
+        &self,
+        descriptor: &BootstrapDescriptor,
+        now_unix_seconds: u64,
+    ) -> ConnectResult<()> {
+        let core_descriptor = descriptor.core_descriptor();
+        core_descriptor
+            .authorize_at(now_unix_seconds, &self.config.descriptor_trust_anchors)
+            .map_err(|error| ConnectError::without_attempts(SdkError::from_core(&error)))?;
+        let service_static_key = core_descriptor
+            .service_static_public_key_bytes()
+            .map_err(|error| ConnectError::without_attempts(SdkError::from_core(&error)))?;
+        if self
+            .config
+            .pinned_service_static_public_keys
+            .iter()
+            .all(|pinned| pinned != &service_static_key)
+        {
+            return Err(ConnectError::without_attempts(SdkError::from_core(
+                &secure_tunnel_core::ApiError::InnerTrustFailure,
+            )));
+        }
+        Ok(())
     }
 
     fn check_cancelled(cancellation: Option<&CancellationHandle>) -> ConnectResult<()> {

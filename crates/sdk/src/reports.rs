@@ -138,6 +138,8 @@ pub struct TransportCacheSnapshot {
     pub last_quic_failure: Option<FallbackReason>,
     /// Unix timestamp after which `QUIC` should be reprobed.
     pub next_quic_probe_after_unix_seconds: Option<u64>,
+    /// Highest descriptor serial accepted for this service/environment cache key.
+    pub highest_descriptor_serial: Option<u64>,
 }
 
 impl TransportCacheSnapshot {
@@ -146,6 +148,7 @@ impl TransportCacheSnapshot {
             last_successful_carrier: self.last_successful_carrier.map(Into::into),
             last_quic_failure: self.last_quic_failure.map(Into::into),
             next_quic_probe_after_unix_seconds: self.next_quic_probe_after_unix_seconds,
+            highest_descriptor_serial: self.highest_descriptor_serial,
         }
     }
 
@@ -154,6 +157,7 @@ impl TransportCacheSnapshot {
             last_successful_carrier: value.last_successful_carrier.map(Into::into),
             last_quic_failure: value.last_quic_failure.map(Into::into),
             next_quic_probe_after_unix_seconds: value.next_quic_probe_after_unix_seconds,
+            highest_descriptor_serial: value.highest_descriptor_serial,
         }
     }
 }
@@ -281,6 +285,8 @@ pub struct SecureChannelArtifacts {
     pub handshake_hash: Option<Vec<u8>>,
     /// Additional channel-binding bytes, when available.
     pub channel_binding: Option<Vec<u8>>,
+    /// Authenticated service Noise static public key, when available.
+    pub service_static_public_key: Option<Vec<u8>>,
 }
 
 impl SecureChannelArtifacts {
@@ -288,6 +294,7 @@ impl SecureChannelArtifacts {
         Self {
             handshake_hash: value.handshake_hash.clone(),
             channel_binding: value.channel_binding.clone(),
+            service_static_public_key: value.service_static_public_key.clone(),
         }
     }
 }

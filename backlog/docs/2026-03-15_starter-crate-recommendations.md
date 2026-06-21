@@ -76,7 +76,7 @@ derive macros.
 | Wire framing | `bytes` + hand-written codecs | Keeps record boundaries explicit and security-sensitive payloads small, typed, and fuzzable. |
 | Local config | `serde` + `toml` | Good fit for repo-local descriptors and config without putting Serde on the critical wire path. |
 | Optional fixture/debug formats | `serde_json` | Useful for fixtures or external descriptors, but not required on the secure wire. |
-| Root/server-key authorization signatures | `ed25519-dalek` | Compact, well-understood fit for an app-shipped trust anchor authorizing rotating server Noise keys. |
+| Descriptor/device signatures | `ed25519-dalek` | Compact, well-understood fit for signed descriptor updates and enrolled-device proof verification. |
 | Device-proof verification | `p256` | Matches the iOS Secure Enclave / CryptoKit P-256 path on the verification side. |
 | Library errors | `thiserror` | Enough structure for library crates without overcomplicating public error types. |
 | App/test errors | `anyhow` | Useful in harnesses, CLI flows, and tests where ergonomic context matters more than stable APIs. |

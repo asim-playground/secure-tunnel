@@ -25,6 +25,8 @@ pub struct SecureReadyArtifacts {
     pub handshake_hash: Option<Vec<u8>>,
     /// Additional channel-binding bytes reserved for later session work.
     pub channel_binding: Option<Vec<u8>>,
+    /// Service Noise static public key that authenticated the channel.
+    pub service_static_public_key: Option<Vec<u8>>,
 }
 
 /// Successful secure-ready transition with the surviving transport and artifacts.

@@ -9,28 +9,58 @@ use bytes::BufMut;
 use snow::TransportState;
 
 use crate::constants::{MAX_APPLICATION_PLAINTEXT_SIZE, MAX_RECORD_PAYLOAD_SIZE, NOISE_SUITE_V1};
-use crate::descriptor::ServiceDescriptor;
+use crate::descriptor::{ServiceDescriptor, TrustAnchor};
 use crate::error::{ApiError, ApiResult};
+use crate::inner_context::NoisePublicKey;
 use crate::selector::SecureReadyEvaluator;
+use crate::service_key::obfuscated_service_static_public_key;
 use crate::session::{CloseDirective, SecureReadyArtifacts, SecureReadyTransport};
 use crate::transport::{BoxFuture, CarrierKind, FramedDuplex};
-use crate::trust::verify_server_key_authorization;
 
 const CLOSE_MESSAGE_TYPE_V1: u8 = 1;
 
-/// Client-side `NX` secure-ready evaluator backed by `snow`.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct SnowNxClientEvaluator;
+/// Client-side `NK1` secure-ready evaluator backed by `snow`.
+#[derive(Debug, Clone)]
+pub struct SnowNk1ClientEvaluator {
+    trusted_roots: Vec<TrustAnchor>,
+    pinned_service_static_public_keys: Vec<NoisePublicKey>,
+}
 
-impl SnowNxClientEvaluator {
-    /// Creates a client-side secure-ready evaluator.
+impl SnowNk1ClientEvaluator {
+    /// Creates a client-side secure-ready evaluator with the built-in example
+    /// descriptor roots and obfuscated service static public key.
     #[must_use]
-    pub const fn new() -> Self {
-        Self
+    pub fn new() -> Self {
+        Self::with_pinned_trust(
+            crate::example_descriptor_trust_anchors(),
+            vec![obfuscated_service_static_public_key()],
+        )
+    }
+
+    /// Creates a client-side secure-ready evaluator with pinned descriptor
+    /// roots and service static public keys.
+    ///
+    /// The service static key is public identity material, but it still must be
+    /// pinned or authorized out-of-band before an `NK1` handshake is accepted.
+    #[must_use]
+    pub const fn with_pinned_trust(
+        trusted_roots: Vec<TrustAnchor>,
+        pinned_service_static_public_keys: Vec<NoisePublicKey>,
+    ) -> Self {
+        Self {
+            trusted_roots,
+            pinned_service_static_public_keys,
+        }
     }
 }
 
-impl SecureReadyEvaluator for SnowNxClientEvaluator {
+impl Default for SnowNk1ClientEvaluator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SecureReadyEvaluator for SnowNk1ClientEvaluator {
     fn reach_secure_ready(
         &self,
         descriptor: &ServiceDescriptor,
@@ -38,10 +68,19 @@ impl SecureReadyEvaluator for SnowNxClientEvaluator {
         mut transport: Box<dyn FramedDuplex>,
     ) -> BoxFuture<'_, ApiResult<SecureReadyTransport>> {
         let descriptor = descriptor.clone();
+        let trusted_roots = self.trusted_roots.clone();
+        let pinned_service_static_public_keys = self.pinned_service_static_public_keys.clone();
 
         Box::pin(async move {
-            descriptor.validate()?;
+            descriptor.authorize_at(now_unix_seconds, &trusted_roots)?;
             let prologue = descriptor.noise_prologue()?;
+            let service_static_public_key = descriptor.service_static_public_key_bytes()?;
+            if !pinned_service_static_public_keys
+                .iter()
+                .any(|pinned_key| pinned_key == &service_static_public_key)
+            {
+                return Err(ApiError::InnerTrustFailure);
+            }
             let params = NOISE_SUITE_V1
                 .parse()
                 .map_err(|_| ApiError::InnerNoiseFailure)?;
@@ -49,6 +88,9 @@ impl SecureReadyEvaluator for SnowNxClientEvaluator {
             let builder = builder
                 .prologue(&prologue)
                 .map_err(|_| ApiError::InnerNoiseFailure)?;
+            let builder = builder
+                .remote_public_key(&service_static_public_key)
+                .map_err(|_| ApiError::InnerTrustFailure)?;
             let mut initiator = builder
                 .build_initiator()
                 .map_err(|_| ApiError::InnerNoiseFailure)?;
@@ -82,16 +124,9 @@ impl SecureReadyEvaluator for SnowNxClientEvaluator {
             let payload_len = initiator
                 .read_message(&responder_record, &mut payload)
                 .map_err(|_| ApiError::InnerNoiseFailure)?;
-            let remote_static = initiator
-                .get_remote_static()
-                .ok_or(ApiError::InnerTrustFailure)?;
-
-            verify_server_key_authorization(
-                &descriptor,
-                now_unix_seconds,
-                remote_static,
-                &payload[..payload_len],
-            )?;
+            if payload_len != 0 {
+                return Err(ApiError::InnerTrustFailure);
+            }
 
             if !initiator.is_handshake_finished() {
                 return Err(ApiError::InnerNoiseFailure);
@@ -107,6 +142,7 @@ impl SecureReadyEvaluator for SnowNxClientEvaluator {
                 artifacts: SecureReadyArtifacts {
                     handshake_hash: Some(handshake_hash.clone()),
                     channel_binding: Some(handshake_hash),
+                    service_static_public_key: Some(service_static_public_key.to_vec()),
                 },
             })
         })

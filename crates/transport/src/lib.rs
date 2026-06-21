@@ -23,17 +23,21 @@ pub use wss::WssConnector;
 pub struct ProductionTransportPorts {
     quic: QuicConnector,
     wss: WssConnector,
-    secure_ready: secure_tunnel_core::SnowNxClientEvaluator,
+    secure_ready: secure_tunnel_core::SnowNk1ClientEvaluator,
 }
 
 impl ProductionTransportPorts {
     /// Creates production carrier adapters with platform TLS verification.
     #[must_use]
     pub fn new(config: TransportClientConfig) -> Self {
+        let secure_ready = secure_tunnel_core::SnowNk1ClientEvaluator::with_pinned_trust(
+            config.descriptor_trust_anchors(),
+            config.pinned_service_static_public_keys(),
+        );
         Self {
             quic: QuicConnector::new(config.clone()),
             wss: WssConnector::new(config),
-            secure_ready: secure_tunnel_core::SnowNxClientEvaluator::new(),
+            secure_ready,
         }
     }
 
@@ -51,7 +55,7 @@ impl ProductionTransportPorts {
 
     /// Returns the secure-ready evaluator used after carrier establishment.
     #[must_use]
-    pub const fn secure_ready(&self) -> &secure_tunnel_core::SnowNxClientEvaluator {
+    pub const fn secure_ready(&self) -> &secure_tunnel_core::SnowNk1ClientEvaluator {
         &self.secure_ready
     }
 }

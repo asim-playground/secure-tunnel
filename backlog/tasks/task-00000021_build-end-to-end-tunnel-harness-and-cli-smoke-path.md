@@ -66,7 +66,7 @@ session establishment, application record exchange, and close work together.
 ## Task Dependencies
 
 - backlog/tasks/task-00000019_implement-production-quic-and-wss-carrier-adapters.md
-- backlog/tasks/task-00000020_implement-account-and-device-session-protocol.md
+- backlog/tasks/completed/task-00000020_implement-account-and-device-session-protocol.md
 - backlog/plans/plan-00000002_product-secure-tunnel-sdk-and-bindings.md
 
 ## Reference Tasks

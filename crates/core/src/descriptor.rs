@@ -7,9 +7,12 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::codec::put_len_prefixed_str;
 use crate::constants::{NOISE_SUITE_V1, PROTOCOL_ID_V1, QUIC_ALPN_V1, WSS_SUBPROTOCOL_V1};
+use crate::descriptor_auth::{authorize_descriptor_at, validate_descriptor_window};
 use crate::error::{ApiError, ApiResult};
+use crate::inner_context::{
+    InnerChannelContext, parse_service_static_public_key, parse_signed_descriptor_hash,
+};
 use crate::transport::{
     CandidateSource, CarrierKind, TransportCacheSnapshot, TransportCandidate, TransportTarget,
 };
@@ -36,6 +39,12 @@ pub struct ServiceDescriptor {
     pub protocol_id: String,
     /// Expected Noise suite identifier.
     pub noise_suite: String,
+    /// Authorized service Noise static public key, base64-encoded.
+    pub service_static_public_key: String,
+    /// Hash of the signed or pinned descriptor, base64-encoded.
+    pub signed_descriptor_hash: String,
+    /// Root signature over the canonical descriptor hash.
+    pub descriptor_signature: DescriptorSignature,
     /// Root keys that authorize server Noise static keys and descriptor updates.
     pub trust_anchors: Vec<TrustAnchor>,
     /// Shared transport-selection policy.
@@ -51,14 +60,81 @@ impl ServiceDescriptor {
     ///
     /// Returns an error when any bound field exceeds the v1 encoding limit.
     pub fn noise_prologue(&self) -> ApiResult<Vec<u8>> {
-        let mut prologue = Vec::with_capacity(128);
+        self.inner_channel_context()?.prologue_bytes()
+    }
 
-        put_prologue_field(&mut prologue, &self.protocol_id)?;
-        put_prologue_field(&mut prologue, &self.environment_id)?;
-        put_prologue_field(&mut prologue, &self.service_id)?;
-        put_prologue_field(&mut prologue, &self.service_authority)?;
+    /// Returns the authorized service Noise static public key bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the descriptor field is not valid v1 public key
+    /// material.
+    pub fn service_static_public_key_bytes(&self) -> ApiResult<[u8; 32]> {
+        parse_service_static_public_key(&self.service_static_public_key)
+    }
 
-        Ok(prologue)
+    /// Returns the signed or pinned descriptor hash bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the descriptor field is not valid v1 hash
+    /// material.
+    pub fn signed_descriptor_hash_bytes(&self) -> ApiResult<[u8; 32]> {
+        parse_signed_descriptor_hash(&self.signed_descriptor_hash)
+    }
+
+    /// Returns the stable context bound into the inner Noise prologue.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when descriptor-bound context is invalid.
+    pub fn inner_channel_context(&self) -> ApiResult<InnerChannelContext> {
+        InnerChannelContext::v1(
+            self.service_id.clone(),
+            self.environment_id.clone(),
+            self.service_authority.clone(),
+            self.signed_descriptor_hash_bytes()?,
+        )
+    }
+
+    /// Verifies descriptor freshness and root authorization at a timestamp.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the descriptor is structurally invalid, outside
+    /// its validity window, has a mismatched canonical hash, or lacks a valid
+    /// signature from one of the pinned roots.
+    pub fn authorize_at(
+        &self,
+        now_unix_seconds: u64,
+        trusted_roots: &[TrustAnchor],
+    ) -> ApiResult<()> {
+        authorize_descriptor_at(self, trusted_roots, now_unix_seconds)
+    }
+
+    /// Verifies descriptor freshness at a timestamp.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the descriptor is outside its validity window.
+    pub fn ensure_valid_at(&self, now_unix_seconds: u64) -> ApiResult<()> {
+        validate_descriptor_window(self, now_unix_seconds)
+    }
+
+    /// Re-signs a descriptor with the built-in example root for local tests.
+    ///
+    /// This helper exists so integration fixtures can mutate local ports and
+    /// generated service static keys while still exercising descriptor
+    /// signature verification. It is not compiled into release builds.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when canonical descriptor bytes cannot be built.
+    #[cfg(debug_assertions)]
+    #[doc(hidden)]
+    pub fn resign_with_example_key_for_testing(&mut self) -> ApiResult<()> {
+        *self = crate::descriptor_auth::sign_example_descriptor(self.clone())?;
+        Ok(())
     }
 
     /// Returns the ordered connect plan for the current coarse network posture.
@@ -75,6 +151,15 @@ impl ServiceDescriptor {
         now_unix_seconds: u64,
     ) -> ApiResult<Vec<TransportCandidate>> {
         self.validate()?;
+        self.ensure_valid_at(now_unix_seconds)?;
+        if cache
+            .and_then(|snapshot| snapshot.highest_descriptor_serial)
+            .is_some_and(|serial| self.descriptor_serial < serial)
+        {
+            return Err(ApiError::InvalidServiceDescriptor(
+                "descriptor_serial is older than the cached accepted descriptor",
+            ));
+        }
 
         let quic_target = self
             .carriers
@@ -119,6 +204,11 @@ impl ServiceDescriptor {
                 "descriptor_version must be 1 for v1 descriptors",
             ));
         }
+        if self.descriptor_serial == 0 {
+            return Err(ApiError::InvalidServiceDescriptor(
+                "descriptor_serial must not be zero",
+            ));
+        }
 
         validate_required_text("not_before", &self.not_before)?;
         validate_required_text("not_after", &self.not_after)?;
@@ -138,6 +228,9 @@ impl ServiceDescriptor {
             ));
         }
 
+        self.service_static_public_key_bytes()?;
+        self.signed_descriptor_hash_bytes()?;
+
         if self.trust_anchors.is_empty() {
             return Err(ApiError::InvalidServiceDescriptor(
                 "at least one trust anchor is required",
@@ -147,6 +240,7 @@ impl ServiceDescriptor {
         for trust_anchor in &self.trust_anchors {
             validate_trust_anchor(trust_anchor)?;
         }
+        validate_descriptor_signature(&self.descriptor_signature)?;
 
         if self.selection_policy.preferred_carrier != CarrierKind::Quic {
             return Err(ApiError::InvalidServiceDescriptor(
@@ -177,6 +271,16 @@ impl ServiceDescriptor {
     }
 }
 
+fn validate_descriptor_signature(signature: &DescriptorSignature) -> ApiResult<()> {
+    validate_required_text("descriptor_signature.key_id", &signature.key_id)?;
+    if signature.algorithm != "ed25519" {
+        return Err(ApiError::InvalidServiceDescriptor(
+            "descriptor_signature algorithm must be ed25519",
+        ));
+    }
+    validate_required_text("descriptor_signature.signature", &signature.signature)
+}
+
 fn validate_required_text(field: &str, value: &str) -> ApiResult<()> {
     if value.trim().is_empty() {
         return Err(match field {
@@ -189,6 +293,12 @@ fn validate_required_text(field: &str, value: &str) -> ApiResult<()> {
             "service_authority" => {
                 ApiError::InvalidServiceDescriptor("service_authority must not be empty")
             }
+            "descriptor_signature.key_id" => {
+                ApiError::InvalidServiceDescriptor("descriptor_signature key_id must not be empty")
+            }
+            "descriptor_signature.signature" => ApiError::InvalidServiceDescriptor(
+                "descriptor_signature signature must not be empty",
+            ),
             _ => ApiError::InvalidServiceDescriptor("required descriptor field must not be empty"),
         });
     }
@@ -275,9 +385,15 @@ fn wss_url_has_authority(url: &str) -> bool {
         && !authority.chars().any(char::is_whitespace)
 }
 
-fn put_prologue_field(buffer: &mut Vec<u8>, value: &str) -> ApiResult<()> {
-    put_len_prefixed_str(buffer, value)
-        .map_err(|_| ApiError::InvalidServiceDescriptor("prologue field exceeds u16 length"))
+/// Signature over a canonical descriptor hash.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DescriptorSignature {
+    /// Trusted root key identifier used to verify this signature.
+    pub key_id: String,
+    /// Signature algorithm name.
+    pub algorithm: String,
+    /// Signature bytes encoded with standard base64.
+    pub signature: String,
 }
 
 /// One root key that authorizes descriptors and server Noise keys.
@@ -367,42 +483,4 @@ fn plan_for_live_attempt(
         });
     }
     plan
-}
-
-/// Returns a sample descriptor with one `QUIC` target and one `WSS` fallback.
-#[must_use]
-pub fn example_service_descriptor() -> ServiceDescriptor {
-    ServiceDescriptor {
-        descriptor_version: 1,
-        descriptor_serial: 1,
-        not_before: "2026-03-15T00:00:00Z".to_owned(),
-        not_after: "2026-06-15T00:00:00Z".to_owned(),
-        environment_id: "prod".to_owned(),
-        service_id: "secure-tunnel-api".to_owned(),
-        service_authority: "api.example.com".to_owned(),
-        protocol_id: PROTOCOL_ID_V1.to_owned(),
-        noise_suite: NOISE_SUITE_V1.to_owned(),
-        trust_anchors: vec![TrustAnchor {
-            key_id: "root-2026-01".to_owned(),
-            algorithm: "ed25519".to_owned(),
-            public_key: "11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=".to_owned(),
-        }],
-        selection_policy: SelectionPolicy {
-            preferred_carrier: CarrierKind::Quic,
-            allow_wss_fallback: true,
-        },
-        carriers: CarrierSet {
-            quic: Some(QuicTarget {
-                connect_host: "api.example.com".to_owned(),
-                port: 443,
-                alpn: QUIC_ALPN_V1.to_owned(),
-                sni_override: None,
-            }),
-            wss: Some(WssTarget {
-                url: "wss://api.example.com/tunnel/v1".to_owned(),
-                subprotocol: WSS_SUBPROTOCOL_V1.to_owned(),
-                authority_override: None,
-            }),
-        },
-    }
 }

@@ -11,9 +11,21 @@ pub(super) trait TransportPorts: Send + Sync {
     fn secure_ready(&self) -> &dyn secure_tunnel_core::SecureReadyEvaluator;
 }
 
-#[derive(Default)]
 pub(super) struct ProductionTransportPorts {
     inner: secure_tunnel_transport::ProductionTransportPorts,
+}
+
+impl ProductionTransportPorts {
+    pub(super) fn new(config: &crate::ClientConfig) -> Self {
+        let transport_config = secure_tunnel_transport::TransportClientConfig::platform_verifier()
+            .with_descriptor_trust_anchors(config.descriptor_trust_anchors.clone())
+            .with_pinned_service_static_public_keys(
+                config.pinned_service_static_public_keys.clone(),
+            );
+        Self {
+            inner: secure_tunnel_transport::ProductionTransportPorts::new(transport_config),
+        }
+    }
 }
 
 impl TransportPorts for ProductionTransportPorts {

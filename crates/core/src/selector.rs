@@ -205,9 +205,12 @@ impl TransportSelector {
                     return Ok(state.finish_success(
                         candidate.target.carrier(),
                         secure_ready_transport,
-                        cache,
-                        now_unix_seconds,
-                        self.quic_reprobe_delay_seconds,
+                        CacheUpdateContext {
+                            previous_cache: cache,
+                            now_unix_seconds,
+                            quic_reprobe_delay_seconds: self.quic_reprobe_delay_seconds,
+                            descriptor_serial: descriptor.descriptor_serial,
+                        },
                     ));
                 }
             }
@@ -308,9 +311,7 @@ impl SelectionState {
         self,
         carrier: CarrierKind,
         secure_ready_transport: SecureReadyTransport,
-        previous_cache: Option<&TransportCacheSnapshot>,
-        now_unix_seconds: u64,
-        quic_reprobe_delay_seconds: u64,
+        cache_update: CacheUpdateContext<'_>,
     ) -> SelectedTransport {
         let report = SecureReadyReport {
             carrier,
@@ -326,9 +327,7 @@ impl SelectionState {
                 carrier,
                 self.cache_state,
                 self.fallback_reason,
-                previous_cache,
-                now_unix_seconds,
-                quic_reprobe_delay_seconds,
+                cache_update,
             ),
             attempts: self.attempts,
         }
@@ -370,6 +369,14 @@ impl TransportSelectionError {
             attempts: attempts.to_vec(),
         }
     }
+}
+
+#[derive(Clone, Copy)]
+struct CacheUpdateContext<'a> {
+    previous_cache: Option<&'a TransportCacheSnapshot>,
+    now_unix_seconds: u64,
+    quic_reprobe_delay_seconds: u64,
+    descriptor_serial: u64,
 }
 
 fn classify_attempt<T>(
@@ -434,29 +441,44 @@ fn updated_cache_snapshot(
     carrier: CarrierKind,
     cache_state: CacheDisposition,
     fallback_reason: Option<crate::FallbackReason>,
-    previous_cache: Option<&TransportCacheSnapshot>,
-    now_unix_seconds: u64,
-    quic_reprobe_delay_seconds: u64,
+    context: CacheUpdateContext<'_>,
 ) -> TransportCacheSnapshot {
+    let highest_descriptor_serial = Some(
+        context
+            .previous_cache
+            .and_then(|snapshot| snapshot.highest_descriptor_serial)
+            .unwrap_or(0)
+            .max(context.descriptor_serial),
+    );
     match carrier {
         CarrierKind::Quic => TransportCacheSnapshot {
             last_successful_carrier: Some(CarrierKind::Quic),
             last_quic_failure: None,
             next_quic_probe_after_unix_seconds: None,
+            highest_descriptor_serial,
         },
         CarrierKind::Wss => match cache_state {
             CacheDisposition::CachedFallback => TransportCacheSnapshot {
                 last_successful_carrier: Some(CarrierKind::Wss),
-                last_quic_failure: fallback_reason
-                    .or_else(|| previous_cache.and_then(|snapshot| snapshot.last_quic_failure)),
-                next_quic_probe_after_unix_seconds: previous_cache
+                last_quic_failure: fallback_reason.or_else(|| {
+                    context
+                        .previous_cache
+                        .and_then(|snapshot| snapshot.last_quic_failure)
+                }),
+                next_quic_probe_after_unix_seconds: context
+                    .previous_cache
                     .and_then(|snapshot| snapshot.next_quic_probe_after_unix_seconds),
+                highest_descriptor_serial,
             },
             CacheDisposition::LiveProbe | CacheDisposition::Reprobe => TransportCacheSnapshot {
                 last_successful_carrier: Some(CarrierKind::Wss),
                 last_quic_failure: fallback_reason,
-                next_quic_probe_after_unix_seconds: fallback_reason
-                    .map(|_| now_unix_seconds.saturating_add(quic_reprobe_delay_seconds)),
+                next_quic_probe_after_unix_seconds: fallback_reason.map(|_| {
+                    context
+                        .now_unix_seconds
+                        .saturating_add(context.quic_reprobe_delay_seconds)
+                }),
+                highest_descriptor_serial,
             },
         },
     }

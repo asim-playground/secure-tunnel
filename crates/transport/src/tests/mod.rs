@@ -11,7 +11,7 @@ mod server;
 use secure_tunnel_core::{
     ApiError, CandidateSource, CarrierConnector, CarrierKind, FallbackReason,
     MAX_RECORD_PAYLOAD_SIZE, TransportCacheSnapshot, TransportConnectors, TransportSelector,
-    TransportTarget, WSS_SUBPROTOCOL_V1,
+    TransportTarget, WSS_SUBPROTOCOL_V1, example_descriptor_trust_anchors,
 };
 
 use self::fixture::{AuthorizationMode, ServiceFixture, TestResult};
@@ -29,7 +29,7 @@ async fn quic_adapter_reaches_secure_ready() -> TestResult<()> {
         vec![secure_tunnel_core::QUIC_ALPN_V1.as_bytes().to_vec()],
     )?;
     let descriptor = fixture.descriptor_for_ports(quic.port(), 9)?;
-    let ports = transport_ports([quic.root_certificate_der()]);
+    let ports = transport_ports([quic.root_certificate_der()], &fixture);
 
     let selected = TransportSelector::new(300)
         .select(
@@ -60,7 +60,7 @@ async fn cached_fallback_wss_adapter_reaches_secure_ready() -> TestResult<()> {
     let fixture = ServiceFixture::new()?;
     let wss = WssServer::start(fixture.clone(), AuthorizationMode::Valid).await?;
     let descriptor = fixture.descriptor_for_ports(9, wss.port())?;
-    let ports = transport_ports([wss.root_certificate_der()]);
+    let ports = transport_ports([wss.root_certificate_der()], &fixture);
     let cache = cached_quic_bad();
 
     let selected = TransportSelector::new(300)
@@ -96,7 +96,10 @@ async fn quic_alpn_rejection_falls_back_to_wss() -> TestResult<()> {
     )?;
     let wss = WssServer::start(fixture.clone(), AuthorizationMode::Valid).await?;
     let descriptor = fixture.descriptor_for_ports(quic.port(), wss.port())?;
-    let ports = transport_ports([quic.root_certificate_der(), wss.root_certificate_der()]);
+    let ports = transport_ports(
+        [quic.root_certificate_der(), wss.root_certificate_der()],
+        &fixture,
+    );
 
     let selected = TransportSelector::new(300)
         .select(
@@ -126,7 +129,10 @@ async fn quic_stream_open_close_falls_back_to_wss() -> TestResult<()> {
     ])?;
     let wss = WssServer::start(fixture.clone(), AuthorizationMode::Valid).await?;
     let descriptor = fixture.descriptor_for_ports(quic.port(), wss.port())?;
-    let ports = transport_ports([quic.root_certificate_der(), wss.root_certificate_der()]);
+    let ports = transport_ports(
+        [quic.root_certificate_der(), wss.root_certificate_der()],
+        &fixture,
+    );
 
     let selected = TransportSelector::new(300)
         .select(
@@ -195,12 +201,15 @@ async fn inner_trust_failure_does_not_fallback_to_wss() -> TestResult<()> {
     let fixture = ServiceFixture::new()?;
     let quic = QuicServer::start(
         fixture.clone(),
-        AuthorizationMode::BadSignature,
+        AuthorizationMode::HandshakePayload,
         vec![secure_tunnel_core::QUIC_ALPN_V1.as_bytes().to_vec()],
     )?;
     let wss = WssServer::start(fixture.clone(), AuthorizationMode::Valid).await?;
     let descriptor = fixture.descriptor_for_ports(quic.port(), wss.port())?;
-    let ports = transport_ports([quic.root_certificate_der(), wss.root_certificate_der()]);
+    let ports = transport_ports(
+        [quic.root_certificate_der(), wss.root_certificate_der()],
+        &fixture,
+    );
 
     let Err(error) = TransportSelector::new(300)
         .select(
@@ -221,10 +230,15 @@ async fn inner_trust_failure_does_not_fallback_to_wss() -> TestResult<()> {
     Ok(())
 }
 
-fn transport_ports(certificates: impl IntoIterator<Item = Vec<u8>>) -> ProductionTransportPorts {
-    ProductionTransportPorts::new(TransportClientConfig::with_root_certificate_der(
-        certificates.into_iter().collect(),
-    ))
+fn transport_ports(
+    certificates: impl IntoIterator<Item = Vec<u8>>,
+    fixture: &ServiceFixture,
+) -> ProductionTransportPorts {
+    ProductionTransportPorts::new(
+        TransportClientConfig::with_root_certificate_der(certificates.into_iter().collect())
+            .with_descriptor_trust_anchors(example_descriptor_trust_anchors())
+            .with_pinned_service_static_public_keys(vec![fixture.server_public_key()]),
+    )
 }
 
 fn cached_quic_bad() -> TransportCacheSnapshot {
@@ -232,5 +246,6 @@ fn cached_quic_bad() -> TransportCacheSnapshot {
         last_successful_carrier: Some(CarrierKind::Wss),
         last_quic_failure: Some(FallbackReason::OuterPathFailure),
         next_quic_probe_after_unix_seconds: Some(NOW_UNIX_SECONDS + 60),
+        highest_descriptor_serial: Some(1),
     }
 }

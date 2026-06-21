@@ -22,6 +22,7 @@ library with SDKs for Swift/iOS, Kotlin, Python, Flutter/Dart, and Go. The
 previous plan proved the v1 protocol direction, transport selector, Noise trust
 path, QUIC/WSS prototype harness, and a narrow manual C ABI that Swift and Go
 can import. The next work is to complete real transport/session behavior,
+realign the inner Noise identity model around a service static public key,
 stabilize the Rust SDK facade, and then package language-specific SDKs from
 that facade. UniFFI remains the default generated path for Swift, Kotlin, and
 Python; Flutter/Dart and Go get first-class paths that still share the same
@@ -47,6 +48,10 @@ Rust facade and behavior.
       cbindgen-generated header, not UniFFI.
 - [x] Keep native Go as the supported Go SDK path and deprecate or delete the
       existing Go-WASM scaffold unless a future task proves a concrete need.
+- [x] Prefer the Codesuper-style service Noise static public key model for
+      Secure Ready: client-side authorization of the service static key,
+      server-only private key custody, stable context bound into the Noise
+      prologue, and account/device identity proven only after Secure Ready.
 
 ## Goals
 
@@ -68,8 +73,10 @@ Rust facade and behavior.
 
 ## Non-Goals
 
-- Reopen the v1 security model, trust-anchor model, or `QUIC`-preferred plus
-  `WSS` fallback decision.
+- Weaken the v1 security model, trust-anchor model, or `QUIC`-preferred plus
+  `WSS` fallback decision. Task `00000020` may refine the inner Noise identity
+  shape to the service static public key model, but it must preserve the
+  service-authenticated inner channel and fallback security invariants.
 - Replace every existing binding surface in one step. The manual C ABI and
   current Python/Go scaffolds can remain while the UniFFI path proves itself.
 - Force-fitting UniFFI onto Flutter/Dart or Go. Those targets use different
@@ -91,15 +98,16 @@ Rust facade and behavior.
 - The manual C ABI currently exposes protocol constants and service descriptor
   JSON validation/normalization, with `crates/go/binding.h` and
   `crates/go/module.modulemap` tracked for Swift import groundwork.
-- The current Rust core can build a v1 descriptor, derive the Noise prologue,
-  plan QUIC-first fallback candidates, evaluate `Secure Ready` over framed I/O,
-  and test prototype QUIC/WSS behavior in a test-only harness.
+- The current Rust core can build a signed v1 descriptor, derive the Noise
+  prologue, plan QUIC-first fallback candidates, evaluate `Secure Ready` over
+  framed I/O, and test prototype QUIC/WSS behavior. Task `00000020` aligned the
+  inner channel with `NK1`, pinned service static public keys, descriptor
+  signatures, descriptor freshness, and serial rollback checks.
 - The SDK facade defines the Rust product contract for descriptors, transport
   policy, connect, cancellation, connect reports, failed-attempt reports,
   security artifacts, sessions, send/receive/request, and close.
-- Real client carrier adapters, account login, known-device session behavior,
-  production server/harness wiring, generated bindings, and native SDK
-  packages are not yet done.
+- Production server/harness wiring, generated bindings, and native SDK packages
+  are not yet done.
 - Local reference material is available for SDK implementation:
   - `backlog/docs/2026-06-21_sdk-reference-repositories.md`
   - `/Users/asimi/Downloads/references/uniffi-rs`
@@ -109,6 +117,7 @@ Rust facade and behavior.
   - `/Users/asimi/Downloads/references/dart-native`
   - `/Users/asimi/Downloads/references/cbindgen`
   - `/Users/asimi/Downloads/references/pyo3`
+  - `/Users/asimi/workplace/codesuper`
 
 ## Gap Analysis
 
@@ -135,9 +144,9 @@ Rust facade and behavior.
 
 ### Production transport and session behavior
 
-- Missing: production `QUIC` and `WSS` connectors, outer TLS configuration,
-  HTTP proxy support, account login, known-device auth, cancellation, retry, and
-  graceful close behavior above prototype coverage.
+- Missing: production end-to-end server/harness wiring, outer TLS custom-CA
+  configuration, HTTP proxy support, retry policy hardening, and graceful close
+  behavior above current SDK/transport coverage.
 - Impact: Swift/Kotlin/Python packages would be importable but not yet useful
   for a real client.
 - Notes: managed-network tasks `00000013` and `00000014` should land after the
@@ -321,7 +330,7 @@ Rust facade and behavior.
 | task-`00000017` | `decompose core modules before sdk expansion` | `Phase 0` | `task-00000016` | `completed` |
 | task-`00000018` | `define product sdk facade and session contract` | `Phase 1` | `task-00000007, task-00000008, task-00000009, task-00000017` | `completed` |
 | task-`00000019` | `implement production quic and wss carrier adapters` | `Phase 1` | `task-00000012, task-00000018` | `completed` |
-| task-`00000020` | `implement account and device session protocol` | `Phase 1` | `task-00000006, task-00000011, task-00000018` | `proposed` |
+| task-`00000020` | `implement account and device session protocol` | `Phase 1` | `task-00000006, task-00000011, task-00000018` | `completed` |
 | task-`00000021` | `build end-to-end tunnel harness and cli smoke path` | `Phase 1` | `task-00000019, task-00000020` | `proposed` |
 | task-`00000013` | `allow optional custom ca cert for intercepted wss or quic` | `Phase 2` | `task-00000009, task-00000012, task-00000019` | `proposed` |
 | task-`00000014` | `allow optional http proxy for wss client` | `Phase 2` | `task-00000009, task-00000012, task-00000013, task-00000019` | `proposed` |
@@ -352,7 +361,7 @@ Rust facade and behavior.
     and run analyzer/import plus iOS simulator native smoke where applicable.
   - Go: build the native Go package over the C ABI and run import, ownership,
     and descriptor/session smoke tests.
-- Regression safeguards: fixture descriptors, server-key authorization
+- Regression safeguards: signed descriptor fixtures, service-static-key pin
   fixtures, fallback/failure snapshots, generated-binding API checks, and
   package artifact checksums.
 - Definition of Done:
@@ -393,8 +402,9 @@ Rust facade and behavior.
 
 ## Immediate Next Actions
 
-1. Start `task-00000020` to implement the account and known-device session
-   protocol on top of the production transport adapters.
+1. Start `task-00000021` to build the end-to-end tunnel harness and CLI smoke
+   path on top of the production transport adapters and account/device session
+   protocol.
 
 ## Implementation Notes
 
@@ -428,6 +438,12 @@ Rust facade and behavior.
   client, and added real secure-ready integration coverage for success,
   fallback, close-before-secure-ready, malformed target, oversized WSS message,
   and inner-trust failure paths.
+- `2026-06-21`: `task-00000020` completed the `NK1` service-static inner
+  channel model, descriptor signatures/freshness/rollback checks, account and
+  device session protocol, SDK auth/enrollment methods, canonical fixtures, and
+  build-time obfuscation for the embedded service static public-key pin. The
+  SDK now performs descriptor root/signature/freshness and service static pin
+  authorization before planning or dialing descriptor-controlled endpoints.
 
 ## Completion Checklist
 
@@ -448,3 +464,4 @@ Rust facade and behavior.
 - `2026-06-21` `Completed task 00000017 and advanced the plan to Phase 1.`
 - `2026-06-21` `Completed task 00000018 with a new secure-tunnel-sdk facade crate, connect/session contract, cancellation semantics, and mock-backed SDK tests.`
 - `2026-06-21` `Completed task 00000019 with production QUIC/WSS transport adapters, SDK default-port wiring, Rustls/Tungstenite supply-chain policy updates, and integration tests for secure-ready success/fallback/failure semantics.`
+- `2026-06-21` `Completed task 00000020 with NK1 service-static trust, signed descriptor authorization, build-time public-key pin obfuscation, account/device session protocol methods, and no-dial regressions for unauthorized descriptors and service keys.`

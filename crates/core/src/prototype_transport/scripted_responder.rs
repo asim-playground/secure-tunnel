@@ -10,27 +10,26 @@ use std::sync::{Arc, Mutex};
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use ed25519_dalek::Signer;
 use snow::TransportState;
 
 use crate::constants::NOISE_SUITE_V1;
-use crate::descriptor::{ServiceDescriptor, example_service_descriptor};
+use crate::descriptor::ServiceDescriptor;
 use crate::error::{ApiError, ApiResult};
+use crate::example_service_descriptor;
 use crate::session::CloseDirective;
 use crate::transport::{BoxFuture, CarrierKind, FramedDuplex};
-use crate::trust::ServerKeyAuthorizationV1;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum AuthorizationMode {
     Valid,
-    BadSignature,
-    WrongServiceId,
+    WrongServiceStaticKey,
+    HandshakePayload,
 }
 
 pub(super) struct PrototypeSessionFixture {
     pub(super) descriptor: ServiceDescriptor,
-    pub(super) transport: ScriptedNxResponderTransport,
+    pub(super) transport: ScriptedNk1ResponderTransport,
     pub(super) state: Arc<Mutex<ResponderState>>,
 }
 
@@ -40,16 +39,18 @@ pub(super) fn scripted_session_fixture(
     responses: Vec<Vec<u8>>,
 ) -> PrototypeSessionFixture {
     let mut descriptor = example_service_descriptor();
-    let signing_key = ed25519_dalek::SigningKey::from_bytes(&[7_u8; 32]);
-    descriptor.trust_anchors[0].key_id = "root-2026-01".to_owned();
-    descriptor.trust_anchors[0].algorithm = "ed25519".to_owned();
-    descriptor.trust_anchors[0].public_key =
-        STANDARD.encode(signing_key.verifying_key().to_bytes());
 
-    let prologue = descriptor.noise_prologue().expect("descriptor prologue");
     let params: snow::params::NoiseParams = NOISE_SUITE_V1.parse().expect("noise params");
     let builder = snow::Builder::new(params.clone());
     let keypair = builder.generate_keypair().expect("responder keypair");
+    descriptor.service_static_public_key = STANDARD.encode(&keypair.public);
+    if matches!(mode, AuthorizationMode::WrongServiceStaticKey) {
+        descriptor.service_static_public_key = STANDARD.encode([8_u8; 32]);
+    }
+    descriptor
+        .resign_with_example_key_for_testing()
+        .expect("test descriptor signature");
+    let prologue = descriptor.noise_prologue().expect("descriptor prologue");
     let responder = snow::Builder::new(params)
         .prologue(&prologue)
         .expect("prologue")
@@ -57,35 +58,16 @@ pub(super) fn scripted_session_fixture(
         .expect("private key")
         .build_responder()
         .expect("responder");
-
-    let mut authorization = ServerKeyAuthorizationV1 {
-        version: 1,
-        key_id: descriptor.trust_anchors[0].key_id.clone(),
-        not_before_unix_seconds: 1_741_000_000,
-        not_after_unix_seconds: 1_743_000_000,
-        environment_id: descriptor.environment_id.clone(),
-        service_id: descriptor.service_id.clone(),
-        service_authority: descriptor.service_authority.clone(),
-        protocol_id: descriptor.protocol_id.clone(),
-        server_static_public_key: keypair.public.as_slice().try_into().expect("static key"),
-        signature: [0_u8; 64],
+    let handshake_payload = if matches!(mode, AuthorizationMode::HandshakePayload) {
+        b"forbidden".to_vec()
+    } else {
+        Vec::new()
     };
-
-    if matches!(mode, AuthorizationMode::WrongServiceId) {
-        authorization.service_id = "wrong-service".to_owned();
-    }
-
-    let signature = signing_key.sign(&authorization.signed_bytes().expect("signed bytes"));
-    authorization.signature = signature.to_bytes();
-    if matches!(mode, AuthorizationMode::BadSignature) {
-        authorization.signature[0] ^= 0xFF;
-    }
-    let payload = authorization.encode().expect("authorization payload");
 
     let state = Arc::new(Mutex::new(ResponderState {
         handshake: Some(responder),
         transport: None,
-        auth_payload: payload,
+        handshake_payload,
         queued_outbound: VecDeque::new(),
         queued_plaintext_responses: VecDeque::from(responses),
         received_plaintexts: Vec::new(),
@@ -98,7 +80,7 @@ pub(super) fn scripted_session_fixture(
 
     PrototypeSessionFixture {
         descriptor,
-        transport: ScriptedNxResponderTransport {
+        transport: ScriptedNk1ResponderTransport {
             carrier,
             state: Arc::clone(&state),
         },
@@ -109,7 +91,7 @@ pub(super) fn scripted_session_fixture(
 pub(super) struct ResponderState {
     handshake: Option<snow::HandshakeState>,
     transport: Option<TransportState>,
-    auth_payload: Vec<u8>,
+    handshake_payload: Vec<u8>,
     queued_outbound: VecDeque<Vec<u8>>,
     queued_plaintext_responses: VecDeque<Vec<u8>>,
     pub(super) received_plaintexts: Vec<Vec<u8>>,
@@ -120,12 +102,12 @@ pub(super) struct ResponderState {
     last_outer_close: Option<CloseDirective>,
 }
 
-pub(super) struct ScriptedNxResponderTransport {
+pub(super) struct ScriptedNk1ResponderTransport {
     carrier: CarrierKind,
     state: Arc<Mutex<ResponderState>>,
 }
 
-impl FramedDuplex for ScriptedNxResponderTransport {
+impl FramedDuplex for ScriptedNk1ResponderTransport {
     fn carrier(&self) -> CarrierKind {
         self.carrier
     }
@@ -142,7 +124,7 @@ impl FramedDuplex for ScriptedNxResponderTransport {
 
                 let mut outbound = vec![0_u8; crate::MAX_RECORD_PAYLOAD_SIZE];
                 let written = handshake
-                    .write_message(&state.auth_payload, &mut outbound)
+                    .write_message(&state.handshake_payload, &mut outbound)
                     .map_err(|_| ApiError::InnerNoiseFailure)?;
                 outbound.truncate(written);
                 state.queued_outbound.push_back(outbound);
