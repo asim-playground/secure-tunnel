@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE description="Build the Secure Tunnel Python SDK wheel"
+set -euo pipefail
+
+mise run python:setup
+cd "${MISE_PROJECT_ROOT}/python"
+rm -rf dist
+uv run maturin build --out dist

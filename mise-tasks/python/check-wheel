@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+#MISE description="Install the built Python SDK wheel in a clean venv and import it"
+set -euo pipefail
+
+mise run python:build-wheel
+cd "${MISE_PROJECT_ROOT}/python"
+
+python_bin="$(
+    python - <<'PY'
+import sys
+
+print(sys.executable)
+PY
+)"
+tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/secure-tunnel-python-wheel.XXXXXX")"
+trap 'rm -rf "${tmp_dir}"' EXIT
+
+uv venv --python "${python_bin}" "${tmp_dir}/venv"
+venv_python="${tmp_dir}/venv/bin/python"
+if [[ ! -x "${venv_python}" ]]; then
+    venv_python="${tmp_dir}/venv/Scripts/python.exe"
+fi
+
+wheel="$(find dist -maxdepth 1 -name 'secure_tunnel-*.whl' -print -quit)"
+test -n "${wheel}" || {
+    echo "missing secure_tunnel wheel in python/dist" >&2
+    exit 1
+}
+wheel_path="$(cd "$(dirname "${wheel}")" && pwd -P)/$(basename "${wheel}")"
+uv pip install --python "${venv_python}" "${wheel_path}"
+"${venv_python}" - <<'PY'
+import json
+
+import secure_tunnel as st
+
+descriptor = json.loads(st.example_service_descriptor_json())
+assert descriptor["service_id"] == "secure-tunnel-api"
+assert st.protocol_id_v1() == "secure-tunnel-v1"
+assert st.default_client_config().pinned_service_static_public_keys
+PY
+uv pip install --python "${venv_python}" "${wheel_path}[server]"
+"${venv_python}" - <<'PY'
+from secure_tunnel.fastapi_fixture import (
+    FixtureSettings,
+    ObservabilityFormat,
+    ObservabilitySettings,
+    RustLogLevel,
+)
+
+settings = FixtureSettings(
+    observability=ObservabilitySettings(
+        level=RustLogLevel.DEBUG,
+        format=ObservabilityFormat.JSON,
+        service_name="secure-tunnel-wheel-check",
+    ),
+)
+env = settings.observability.rust_env()
+assert env["SECURE_TUNNEL_OBSERVABILITY"] == "1"
+assert env["SECURE_TUNNEL_OBSERVABILITY_FORMAT"] == "json"
+assert env["OTEL_SERVICE_NAME"] == "secure-tunnel-wheel-check"
+PY

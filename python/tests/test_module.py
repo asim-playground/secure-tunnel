@@ -12,8 +12,14 @@ import json
 import pytest
 
 from secure_tunnel import (
+    ClientConfig,
+    ConnectOptions,
+    SecureTunnelClient,
     __version__,
+    default_client_config,
+    example_descriptor_json,
     example_service_descriptor_json,
+    normalize_descriptor_json,
     normalize_service_descriptor_json,
     protocol_id_v1,
     quic_alpn_v1,
@@ -42,6 +48,10 @@ def test_example_descriptor_validates():
 
     assert descriptor["service_id"] == "secure-tunnel-api"
     validate_service_descriptor_json(descriptor_json)
+    assert example_descriptor_json() == descriptor_json
+    assert normalize_descriptor_json(descriptor_json) == normalize_service_descriptor_json(
+        descriptor_json,
+    )
 
 
 def test_normalize_descriptor_rejects_invalid_protocol_id():
@@ -60,3 +70,15 @@ def test_validate_descriptor_rejects_invalid_quic_alpn():
 
     with pytest.raises(ValueError, match="QUIC ALPN"):
         validate_service_descriptor_json(json.dumps(descriptor))
+
+
+def test_sdk_facade_types_are_public():
+    """Test that the Python package exposes the shared SDK facade."""
+    config = default_client_config()
+
+    assert isinstance(config, ClientConfig)
+    assert config.quic_reprobe_delay_seconds == 300
+    assert config.descriptor_trust_anchors
+    assert config.pinned_service_static_public_keys
+    assert SecureTunnelClient is not None
+    assert ConnectOptions is not None

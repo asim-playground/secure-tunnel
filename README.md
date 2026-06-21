@@ -8,7 +8,7 @@
   <a href="https://codecov.io/gh/asim-playground/secure-tunnel">
     <img src="https://codecov.io/gh/asim-playground/secure-tunnel/branch/main/graph/badge.svg" alt="Coverage">
   </a>
-  <img src="https://img.shields.io/badge/Rust-1.94.0-blue?style=flat-square" alt="Rust 1.94.0">
+  <img src="https://img.shields.io/badge/Rust-1.96.0-blue?style=flat-square" alt="Rust 1.96.0">
   <a href="https://crates.io/crates/secure-tunnel-core">
     <img src="https://img.shields.io/crates/v/secure-tunnel-core?style=flat-square" alt="Crates.io">
   </a>
@@ -24,8 +24,8 @@ Secure Tunnel is a multi-platform Rust project with:
 
 - 🦀 **Core Library**: Shared functionality in `secure-tunnel-core`
 - 🖥️ **CLI Tool**: Command-line interface in `secure-tunnel-cli`
-- 🐍 **Python Bindings**: Native Python extension module
-- 🔗 **C/Swift ABI**: C-compatible FFI library and generated header
+- 🐍 **Python SDK**: UniFFI-backed package over the shared Rust SDK facade
+- 🔗 **Swift SDK and C ABI**: SwiftPM/XCFramework packaging plus C-compatible ABI
 - 🦫 **Go Bindings**: CGO-based Go library bindings over the C ABI
 
 ## Quick Start
@@ -85,9 +85,10 @@ secure-tunnel/
 │   ├── core/       # Core library (secure-tunnel-core)
 │   ├── cli/        # Command-line tool (secure-tunnel-cli)
 │   ├── go/         # C ABI plus Go bindings
-│   └── go-wasm/    # Rust crate for Go/WASI workflow
-├── crates/python/  # Rust extension crate for Python bindings
-├── python/         # Pure-Python packaging, tests, and pyproject metadata
+│   ├── go-wasm/    # Rust crate for Go/WASI workflow
+│   ├── sdk/        # Product SDK facade
+│   └── sdk-ffi/    # UniFFI facade used by Swift, Kotlin, and Python
+├── python/         # Python SDK wrapper, packaging, tests, and pyproject metadata
 ├── mise-tasks/     # Script-backed mise commands
 ├── scripts/        # Helper scripts used by setup
 └── mise.toml       # Toolchain pins and task aliases
@@ -106,6 +107,40 @@ map in `crates/go/module.modulemap` and use the descriptor/protocol helpers:
 
 Strings returned through `SecureTunnelStringResult.value` are caller-owned and
 must be released with `secure_tunnel_free_string`.
+
+### Python SDK
+
+The Python package is built from the shared UniFFI SDK facade and exposes the
+stable `secure_tunnel` wrapper module:
+
+```bash
+mise run python:build
+mise run python:test
+mise run python:check-wheel
+mise run sdk:python-fastapi-smoke
+```
+
+The public package keeps the historical descriptor helpers while adding the
+coarse SDK client/session operations shared with the generated Swift and Kotlin
+bindings.
+
+The FastAPI fixture is packaged behind the optional `secure-tunnel[server]`
+extra. It is a Python imperative shell around the Rust fixture process; Rust
+keeps descriptor signing, service static-key custody, Noise, auth, and
+application-frame semantics. Configure the fixture with
+`FixtureSettings`/`ObservabilitySettings` or these environment variables:
+
+- `SECURE_TUNNEL_BINDING_FIXTURE_BIN`
+- `SECURE_TUNNEL_FIXTURE_WORKDIR`
+- `SECURE_TUNNEL_OBSERVABILITY_LEVEL`
+- `SECURE_TUNNEL_OBSERVABILITY_FORMAT`
+- `SECURE_TUNNEL_OBSERVABILITY_SERVICE_NAME`
+- `SECURE_TUNNEL_RUST_LOG`
+- `OTEL_EXPORTER_OTLP_ENDPOINT`
+
+When `SECURE_TUNNEL_OBSERVABILITY=1`, the Rust CLI installs a tracing
+subscriber that writes structured logs to stderr so stdout remains reserved for
+machine-readable JSON.
 
 ## Contributing
 

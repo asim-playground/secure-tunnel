@@ -5,7 +5,6 @@ members = [
     "crates/go",
     "crates/go-wasm",
     "crates/harness",
-    "crates/python",
     "crates/sdk",
     "crates/sdk-ffi",
     "crates/transport",

@@ -290,9 +290,9 @@ Rust facade and behavior.
           descriptor/session smoke test.
     - [ ] Kotlin can import the artifact and run the same scenario through JNA
           or the documented UniFFI backend.
-    - [ ] Python can import the package and run the same scenario, with a clear
+    - [x] Python can import the package and run the same scenario, with a clear
           decision on whether UniFFI replaces or wraps the existing PyO3 path.
-    - [ ] Rust client can run the same scenario against a Python FastAPI server
+    - [x] Rust client can run the same scenario against a Python FastAPI server
           fixture without changing protocol semantics.
     - [ ] Kotlin and Python are at least at generated-binding and package smoke
           parity before release CI treats them as supported SDK targets.
@@ -343,8 +343,8 @@ Rust facade and behavior.
 | task-`00000023` | `create uniffi sdk facade and bindgen tooling` | `Phase 3` | `task-00000018, task-00000021, task-00000022` | `completed` |
 | task-`00000024` | `package swift sdk as swiftpm and xcframework` | `Phase 4` | `task-00000022, task-00000023` | `completed` |
 | task-`00000025` | `package kotlin sdk as jvm or android artifact` | `Phase 4` | `task-00000022, task-00000023` | `proposed` |
-| task-`00000026` | `package python sdk from the shared rust facade` | `Phase 4` | `task-00000022, task-00000023` | `proposed` |
-| task-`00000030` | `build python fastapi server and rust client e2e` | `Phase 4` | `task-00000023` | `proposed` |
+| task-`00000026` | `package python sdk from the shared rust facade` | `Phase 4` | `task-00000022, task-00000023` | `completed` |
+| task-`00000030` | `build python fastapi server and rust client e2e` | `Phase 4` | `task-00000023, task-00000026` | `completed` |
 | task-`00000028` | `package flutter dart sdk using rust facade` | `Phase 5` | `task-00000018, task-00000021, task-00000022, task-00000024` | `proposed` |
 | task-`00000029` | `package go sdk over stable c abi` | `Phase 5` | `task-00000016, task-00000018, task-00000021, task-00000022, task-00000024` | `proposed` |
 | task-`00000027` | `add sdk release ci and versioning` | `Phase 6` | `task-00000022, task-00000024, task-00000025, task-00000026, task-00000028, task-00000029` | `proposed` |
@@ -402,8 +402,8 @@ Rust facade and behavior.
 | Which package should become the first production-grade SDK target? | before `task-00000024` starts | Asim Ihsan | `resolved: Swift/iOS first; Kotlin/Python smoke parity until facade stabilizes` |
 | Should the UniFFI contract use UDL or proc macros? | during `task-00000023` | Asim Ihsan | `recommended: UDL first for a reviewable language-neutral API spec` |
 | What cancellation semantics should the SDK expose for long-running connect/session operations? | during `task-00000018` | Asim Ihsan | `resolved: connect accepts an explicit CancellationHandle; session operation futures are safe to drop/cancel via transport lease restoration, while explicit session cancellation handles remain future work if real adapters need them` |
-| Does Python ultimately use UniFFI only, PyO3 only, or a PyO3 wrapper over the shared facade? | during `task-00000026` | Asim Ihsan | `open` |
-| Should the Python FastAPI server use PyO3/maturin, UniFFI Python, or a small wrapper over a Rust native library? | during `task-00000030` | Asim Ihsan | `open` |
+| Does Python ultimately use UniFFI only, PyO3 only, or a PyO3 wrapper over the shared facade? | during `task-00000026` | Asim Ihsan | `resolved: Python uses maturin-packaged UniFFI over secure-tunnel-sdk-ffi as the behavioral core, with a small secure_tunnel wrapper and legacy descriptor compatibility aliases` |
+| Should the Python FastAPI server use PyO3/maturin, UniFFI Python, or a small wrapper over a Rust native library? | during `task-00000030` | Asim Ihsan | `resolved: FastAPI is the Python imperative shell over the Rust binding-fixture process; Rust keeps service static-key custody, descriptor signing, protocol, auth, and application-frame semantics` |
 | Should Flutter/Dart use Flutter Rust Bridge or direct Dart FFI plus ffigen first? | during `task-00000028` | Asim Ihsan | `recommended: Flutter Rust Bridge first, compare direct Dart FFI only if packaging evidence pushes that way` |
 | Should Go keep Go-WASM as supported SDK scope? | during `task-00000029` | Asim Ihsan | `resolved: native Go is supported; Go-WASM should be deprecated or deleted unless a future task proves concrete need` |
 
@@ -411,10 +411,13 @@ Rust facade and behavior.
 
 1. Start `task-00000025` to package the Kotlin SDK as the next UniFFI native
    artifact.
-2. Start `task-00000026` and `task-00000030` together if Python client package
-   ergonomics and Python FastAPI server interop should share one packaging
-   decision.
-3. Keep `task-00000013` and `task-00000014` queued for managed-network support
+2. Start `task-00000027` to make SDK release packaging decide how to repair
+   macOS Python wheels that reference Homebrew `libiconv`, archive package
+   outputs, and fail stale generated/package metadata.
+3. Start `task-00000028` and `task-00000029` after Kotlin package smoke parity,
+   keeping Flutter/Dart and native Go on the same fixture semantics as Swift,
+   Kotlin, Python, and Rust-client/FastAPI smokes.
+4. Keep `task-00000013` and `task-00000014` queued for managed-network support
    before declaring the SDK broadly production-ready.
 
 ## Implementation Notes
@@ -474,6 +477,24 @@ Rust facade and behavior.
   `mise run sdk:swift` builds an Apple-target XCFramework, checks the package,
   runs a SwiftPM command-line session smoke, and runs an iOS simulator XCTest
   session smoke against the Rust fixture.
+- `2026-06-21`: Prepared coordinated implementation plans for
+  `task-00000026` and `task-00000030`. The planned Python path is
+  maturin-packaged UniFFI as the behavioral core, a typed `secure_tunnel`
+  wrapper for ergonomics and PyO3 migration, and a FastAPI fixture that acts as
+  the Python imperative shell over Rust protocol/server lifecycle hooks.
+- `2026-06-21`: `task-00000026` completed the Python SDK package migration to
+  maturin-packaged UniFFI over `secure-tunnel-sdk-ffi`, removed the legacy PyO3
+  Rust crate, preserved descriptor compatibility aliases in the
+  `secure_tunnel` wrapper, and added wheel/import/session smoke tasks.
+- `2026-06-21`: `task-00000030` completed the Python FastAPI fixture shell and
+  Rust-client e2e smoke. FastAPI serves health/descriptor/bootstrap/fixture
+  metadata while Rust owns service static-key custody, descriptor signing,
+  protocol/auth/application semantics, and the server fixture lifecycle.
+- `2026-06-21`: Python FastAPI fixture configuration now uses typed Python
+  dataclasses and `StrEnum` values. `ObservabilitySettings` maps Python server
+  config into Rust process environment for `tracing_subscriber` stderr logs,
+  `RUST_LOG`, OTLP endpoint variables, service name, and resource attributes,
+  while CLI stdout remains reserved for machine-readable JSON.
 
 ## Completion Checklist
 
@@ -499,3 +520,7 @@ Rust facade and behavior.
 - `2026-06-21` `Completed task 00000022 with SDK observability taxonomy, redacted tracing hooks, exact conformance CLI/mise automation, and explicit pending managed-network rows.`
 - `2026-06-21` `Completed task 00000023 with pinned UniFFI UDL/bindgen tooling, generated Swift/Kotlin/Python smoke clients, and a follow-up FastAPI server interop task.`
 - `2026-06-21` `Completed task 00000024 with a SwiftPM SecureTunnel package, XCFramework assembly, SwiftPM host smoke, iOS simulator XCTest smoke, and macOS CI wiring.`
+- `2026-06-21` `Prepared coordinated Python plans for task 00000026 and task 00000030, centered on maturin-packaged UniFFI, a typed secure_tunnel wrapper, and a FastAPI shell over Rust protocol/server lifecycle hooks.`
+- `2026-06-21` `Completed task 00000026 with a maturin UniFFI Python package, secure_tunnel wrapper, compatibility aliases, wheel/import checks, and Python package session smoke.`
+- `2026-06-21` `Completed task 00000030 with a FastAPI fixture shell over the Rust binding fixture, a Rust binding-fixture-client command, and Rust-client-to-Python-FastAPI e2e smoke in mise run dev.`
+- `2026-06-21` `Review and user-request follow-up: added Python dataclass/StrEnum server configuration, server optional extra wheel coverage, timeout-safe fixture startup cleanup, and Rust CLI tracing-subscriber configuration from Python-provided environment.`

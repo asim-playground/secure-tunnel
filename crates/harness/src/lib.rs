@@ -27,7 +27,8 @@ use fixture::{LocalServiceFixture, SMOKE_PING, SMOKE_PONG};
 use server::{QuicServer, WssServer};
 
 pub use binding_fixture::{
-    BindingFixtureReport, BindingFixtureServer, start_binding_fixture_server,
+    BindingFixtureClientReport, BindingFixtureReport, BindingFixtureServer,
+    run_binding_fixture_client, start_binding_fixture_server,
 };
 pub use conformance::{
     ConformanceReport, ConformanceScenario, ConformanceSuiteReport, PendingConformanceReport,

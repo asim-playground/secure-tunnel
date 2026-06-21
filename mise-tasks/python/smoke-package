@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+#MISE description="Run end-to-end smoke through the packaged Python SDK"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+# shellcheck source=../sdk/smoke-common.sh disable=SC1091
+source mise-tasks/sdk/smoke-common.sh
+
+if [[ "${SECURE_TUNNEL_PYTHON_SKIP_BUILD:-0}" != "1" ]]; then
+  mise run python:build
+fi
+fixture_json="$(mktemp "${TMPDIR:-/tmp}/secure-tunnel-python-package-fixture.XXXXXX.json")"
+trap 'stop_secure_tunnel_fixture; rm -f "${fixture_json}"' EXIT
+
+start_secure_tunnel_fixture "${fixture_json}"
+(
+  cd "${MISE_PROJECT_ROOT}/python"
+  uv run python tests/session_smoke.py "${fixture_json}"
+)

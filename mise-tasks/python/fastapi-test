@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#MISE description="Run Python FastAPI fixture tests"
+set -euo pipefail
+
+mise run python:build
+cd "${MISE_PROJECT_ROOT:?}/python"
+uv run pytest tests/test_fastapi_fixture.py

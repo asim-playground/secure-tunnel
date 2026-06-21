@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+#MISE description="Run Rust-client-to-Python-FastAPI fixture smoke"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+cargo build -p secure-tunnel-cli >/dev/null
+if [[ "${SECURE_TUNNEL_PYTHON_SKIP_BUILD:-0}" != "1" ]]; then
+  mise run python:build
+fi
+(
+  cd "${MISE_PROJECT_ROOT}/python"
+  SECURE_TUNNEL_CLI_BIN="${MISE_PROJECT_ROOT}/target/debug/secure-tunnel-cli" \
+    uv run python tests/fastapi_rust_client_smoke.py
+)

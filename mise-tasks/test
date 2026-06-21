@@ -7,8 +7,8 @@ mise run rust:test-doc
 
 
 mise run python:test
+SECURE_TUNNEL_PYTHON_SKIP_BUILD=1 mise run sdk:python-fastapi-smoke
 
 
 mise run go:test
 mise run go-wasm:test
-

@@ -3,5 +3,5 @@
 set -euo pipefail
 
 cd "${MISE_PROJECT_ROOT}/python"
-rm -rf .venv target dist ./*.egg-info
+rm -rf .venv target dist ./*.egg-info src/secure_tunnel/_native
 find . -type d -name __pycache__ -prune -exec rm -rf {} +

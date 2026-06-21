@@ -7,17 +7,21 @@
 
 //! Command-line interface for Secure Tunnel.
 
+use std::env;
 use std::fmt;
 use std::io::Write as _;
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use secure_tunnel_harness::{
-    ConformanceScenario, ConformanceSuiteReport, SmokeScenario, run_conformance_scenario,
-    run_conformance_suite, run_smoke_scenarios, start_binding_fixture_server,
+    BindingFixtureReport, ConformanceScenario, ConformanceSuiteReport, SmokeScenario,
+    run_binding_fixture_client, run_conformance_scenario, run_conformance_suite,
+    run_smoke_scenarios, start_binding_fixture_server,
 };
 
 #[tokio::main]
 async fn main() {
+    init_observability_from_env();
     if let Err(error) = run(std::env::args().skip(1).collect()).await {
         eprintln!("{error}");
         std::process::exit(error.exit_code());
@@ -33,6 +37,7 @@ async fn run(args: Vec<String>) -> Result<(), CliError> {
         Some("smoke") => run_smoke_command(&args[1..]).await,
         Some("conformance") => run_conformance_command(&args[1..]).await,
         Some("binding-fixture") => run_binding_fixture_command(&args[1..]).await,
+        Some("binding-fixture-client") => run_binding_fixture_client_command(&args[1..]).await,
         Some("-h" | "--help") => {
             print_usage();
             Ok(())
@@ -80,6 +85,17 @@ async fn run_binding_fixture_command(args: &[String]) -> Result<(), CliError> {
     Ok(())
 }
 
+async fn run_binding_fixture_client_command(args: &[String]) -> Result<(), CliError> {
+    let Some(options) = BindingFixtureClientOptions::parse(args)? else {
+        return Ok(());
+    };
+    let fixture_json = std::fs::read_to_string(&options.fixture_path)?;
+    let fixture: BindingFixtureReport = serde_json::from_str(&fixture_json)?;
+    let report = run_binding_fixture_client(&fixture).await?;
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    Ok(())
+}
+
 fn print_metadata() {
     let descriptor = secure_tunnel_core::example_service_descriptor();
     println!("secure-tunnel-cli");
@@ -99,6 +115,53 @@ fn print_usage() {
     );
     println!("  secure-tunnel-cli conformance [--scenario all|<name>] [--format json]");
     println!("  secure-tunnel-cli binding-fixture [--format json]");
+    println!("  secure-tunnel-cli binding-fixture-client <fixture-json> [--format json]");
+}
+
+fn init_observability_from_env() {
+    let enabled = env::var("SECURE_TUNNEL_OBSERVABILITY")
+        .is_ok_and(|value| !matches!(value.to_ascii_lowercase().as_str(), "0" | "false" | "off"));
+    if !enabled {
+        return;
+    }
+
+    let filter = env::var("RUST_LOG").unwrap_or_else(|_| default_rust_log_filter());
+    let filter = tracing_subscriber::EnvFilter::try_new(filter)
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(default_rust_log_filter()));
+    let format = env::var("SECURE_TUNNEL_OBSERVABILITY_FORMAT")
+        .unwrap_or_else(|_| "compact".to_owned())
+        .to_ascii_lowercase();
+    let ansi = env::var("SECURE_TUNNEL_OBSERVABILITY_ANSI")
+        .is_ok_and(|value| matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes"));
+
+    if format == "json" {
+        let _ = tracing_subscriber::fmt()
+            .json()
+            .with_env_filter(filter)
+            .with_writer(std::io::stderr)
+            .with_ansi(ansi)
+            .try_init();
+    } else {
+        let _ = tracing_subscriber::fmt()
+            .compact()
+            .with_env_filter(filter)
+            .with_writer(std::io::stderr)
+            .with_ansi(ansi)
+            .try_init();
+    }
+}
+
+fn default_rust_log_filter() -> String {
+    let level = env::var("SECURE_TUNNEL_OBSERVABILITY_LEVEL").unwrap_or_else(|_| "info".to_owned());
+    [
+        "secure_tunnel_cli",
+        "secure_tunnel_core",
+        "secure_tunnel_harness",
+        "secure_tunnel_sdk",
+        "secure_tunnel_transport",
+    ]
+    .map(|target| format!("{target}={level}"))
+    .join(",")
 }
 
 struct SmokeOptions {
@@ -218,6 +281,45 @@ impl BindingFixtureOptions {
             return Err(CliError::usage("only --format json is supported"));
         }
         Ok(Some(Self))
+    }
+}
+
+struct BindingFixtureClientOptions {
+    fixture_path: PathBuf,
+}
+
+impl BindingFixtureClientOptions {
+    fn parse(args: &[String]) -> Result<Option<Self>, CliError> {
+        let mut fixture_path = None;
+        let mut format = "json".to_owned();
+        let mut index = 0_usize;
+        while index < args.len() {
+            match args[index].as_str() {
+                "-h" | "--help" => {
+                    print_usage();
+                    return Ok(None);
+                }
+                "--format" => {
+                    index += 1;
+                    format.clone_from(
+                        args.get(index)
+                            .ok_or(CliError::usage("--format requires a value"))?,
+                    );
+                }
+                value if fixture_path.is_none() => {
+                    fixture_path = Some(PathBuf::from(value));
+                }
+                _ => return Err(CliError::usage("unknown binding-fixture-client option")),
+            }
+            index += 1;
+        }
+        if format != "json" {
+            return Err(CliError::usage("only --format json is supported"));
+        }
+        let fixture_path = fixture_path.ok_or(CliError::usage(
+            "binding-fixture-client requires a fixture JSON path",
+        ))?;
+        Ok(Some(Self { fixture_path }))
     }
 }
 

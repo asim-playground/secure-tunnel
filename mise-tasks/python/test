@@ -5,3 +5,4 @@ set -euo pipefail
 mise run python:build
 cd "${MISE_PROJECT_ROOT}/python"
 uv run pytest tests
+SECURE_TUNNEL_PYTHON_SKIP_BUILD=1 mise run python:smoke-package
