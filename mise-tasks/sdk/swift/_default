@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+#MISE description="Build and smoke the Swift SDK package"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+
+mise run sdk:swift:package
+SECURE_TUNNEL_SWIFT_SKIP_PACKAGE=1 mise run sdk:swift:check-package
+SECURE_TUNNEL_SWIFT_SKIP_PACKAGE=1 mise run sdk:swift:smoke-package
+SECURE_TUNNEL_SWIFT_SKIP_PACKAGE=1 mise run sdk:swift:smoke-ios-simulator

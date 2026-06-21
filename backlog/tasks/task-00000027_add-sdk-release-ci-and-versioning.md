@@ -73,7 +73,7 @@ together.
 ## Task Dependencies
 
 - backlog/tasks/completed/task-00000022_add-observability-and-conformance-test-matrix.md
-- backlog/tasks/task-00000024_package-swift-sdk-as-swiftpm-and-xcframework.md
+- backlog/tasks/completed/task-00000024_package-swift-sdk-as-swiftpm-and-xcframework.md
 - backlog/tasks/task-00000025_package-kotlin-sdk-as-jvm-or-android-artifact.md
 - backlog/tasks/task-00000026_package-python-sdk-from-the-shared-rust-facade.md
 - backlog/tasks/task-00000028_package-flutter-dart-sdk-using-rust-facade.md

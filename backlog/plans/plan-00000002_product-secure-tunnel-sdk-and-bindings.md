@@ -286,7 +286,7 @@ Rust facade and behavior.
     - `task-00000026` `package python sdk from the shared rust facade`
     - `task-00000030` `build python fastapi server and rust client e2e`
 - Exit Criteria:
-    - [ ] Swift/iOS is the first production-grade SDK package and can run a
+    - [x] Swift/iOS is the first production-grade SDK package and can run a
           descriptor/session smoke test.
     - [ ] Kotlin can import the artifact and run the same scenario through JNA
           or the documented UniFFI backend.
@@ -341,7 +341,7 @@ Rust facade and behavior.
 | task-`00000014` | `allow optional http proxy for wss client` | `Phase 2` | `task-00000009, task-00000012, task-00000013, task-00000019` | `proposed` |
 | task-`00000022` | `add observability and conformance test matrix` | `Phase 2` | `task-00000009, task-00000021` | `completed` |
 | task-`00000023` | `create uniffi sdk facade and bindgen tooling` | `Phase 3` | `task-00000018, task-00000021, task-00000022` | `completed` |
-| task-`00000024` | `package swift sdk as swiftpm and xcframework` | `Phase 4` | `task-00000022, task-00000023` | `proposed` |
+| task-`00000024` | `package swift sdk as swiftpm and xcframework` | `Phase 4` | `task-00000022, task-00000023` | `completed` |
 | task-`00000025` | `package kotlin sdk as jvm or android artifact` | `Phase 4` | `task-00000022, task-00000023` | `proposed` |
 | task-`00000026` | `package python sdk from the shared rust facade` | `Phase 4` | `task-00000022, task-00000023` | `proposed` |
 | task-`00000030` | `build python fastapi server and rust client e2e` | `Phase 4` | `task-00000023` | `proposed` |
@@ -375,7 +375,7 @@ Rust facade and behavior.
     - [ ] Rust library can run the end-to-end local secure tunnel scenario.
     - [x] Swift, Kotlin, and Python bindings are generated from the same pinned
           facade.
-    - [ ] Swift/iOS is the first production-grade SDK package target.
+    - [x] Swift/iOS is the first production-grade SDK package target.
     - [ ] Flutter/Dart and Go package tasks exist and share the same Rust SDK
           facade semantics.
     - [ ] Native packages build in CI and pass import/session smoke tests.
@@ -409,8 +409,8 @@ Rust facade and behavior.
 
 ## Immediate Next Actions
 
-1. Start `task-00000024` to package the Swift SDK as the first production-grade
-   SwiftPM/XCFramework target.
+1. Start `task-00000025` to package the Kotlin SDK as the next UniFFI native
+   artifact.
 2. Start `task-00000026` and `task-00000030` together if Python client package
    ergonomics and Python FastAPI server interop should share one packaging
    decision.
@@ -468,6 +468,12 @@ Rust facade and behavior.
   failed-connect attempt diagnostics, and secure channel artifacts across the
   FFI boundary, and added end-to-end generated-client smokes against the Rust
   fixture. Python FastAPI server interop was split into `task-00000030`.
+- `2026-06-21`: `task-00000024` packaged the Swift SDK as the first
+  production-grade native SDK target. The tracked SwiftPM templates live under
+  `bindings/swift`, generated output lives under `target/sdk/swift`, and
+  `mise run sdk:swift` builds an Apple-target XCFramework, checks the package,
+  runs a SwiftPM command-line session smoke, and runs an iOS simulator XCTest
+  session smoke against the Rust fixture.
 
 ## Completion Checklist
 
@@ -492,3 +498,4 @@ Rust facade and behavior.
 - `2026-06-21` `Completed task 00000021 with secure-tunnel-harness, JSON-first CLI smoke scenarios for QUIC success and WSS fallback, SDK local TLS root config, and mise smoke automation in the CI task.`
 - `2026-06-21` `Completed task 00000022 with SDK observability taxonomy, redacted tracing hooks, exact conformance CLI/mise automation, and explicit pending managed-network rows.`
 - `2026-06-21` `Completed task 00000023 with pinned UniFFI UDL/bindgen tooling, generated Swift/Kotlin/Python smoke clients, and a follow-up FastAPI server interop task.`
+- `2026-06-21` `Completed task 00000024 with a SwiftPM SecureTunnel package, XCFramework assembly, SwiftPM host smoke, iOS simulator XCTest smoke, and macOS CI wiring.`

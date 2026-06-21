@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+#MISE description="Build the local SwiftPM package and XCFramework"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+# shellcheck disable=SC1091
+# shellcheck source=common.sh
+source mise-tasks/sdk/swift/common.sh
+
+swift_sdk_require_darwin
+mise run sdk:swift:ensure-targets
+mise run sdk:generate-bindings
+swift_sdk_cargo_build_env
+
+output_root="$(swift_sdk_output_root)"
+package_root="$(swift_sdk_package_root)"
+staging_root="${output_root}/staging"
+headers_dir="${staging_root}/headers"
+generated_swift_dir="$(swift_sdk_generated_swift_dir)"
+lib_name="$(swift_sdk_staticlib_name)"
+
+swift_sdk_remove_under_target "${output_root}"
+mkdir -p \
+  "${package_root}/Artifacts" \
+  "${package_root}/Sources/SecureTunnel" \
+  "${package_root}/Tests/SecureTunnelPackageTests/Resources" \
+  "${headers_dir}" \
+  "${staging_root}/ios-simulator" \
+  "${staging_root}/macos"
+
+cp bindings/swift/Package.swift "${package_root}/Package.swift"
+cp bindings/swift/Sources/SecureTunnel/SecureTunnel.swift \
+  "${package_root}/Sources/SecureTunnel/SecureTunnel.swift"
+cp bindings/swift/Tests/SecureTunnelPackageTests/SecureTunnelPackageTests.swift \
+  "${package_root}/Tests/SecureTunnelPackageTests/SecureTunnelPackageTests.swift"
+printf '{}\n' >"${package_root}/Tests/SecureTunnelPackageTests/Resources/binding-fixture.json"
+
+cp "${generated_swift_dir}/secure_tunnel_sdk_ffi.swift" \
+  "${package_root}/Sources/SecureTunnel/secure_tunnel_sdk_ffi.swift"
+cp "${generated_swift_dir}/secure_tunnel_sdk_ffiFFI.h" \
+  "${headers_dir}/secure_tunnel_sdk_ffiFFI.h"
+cp "${generated_swift_dir}/secure_tunnel_sdk_ffiFFI.modulemap" \
+  "${headers_dir}/module.modulemap"
+
+for target in \
+  aarch64-apple-ios \
+  aarch64-apple-ios-sim \
+  x86_64-apple-ios \
+  aarch64-apple-darwin \
+  x86_64-apple-darwin
+do
+  cargo build -p secure-tunnel-sdk-ffi --lib --release --target "${target}"
+  test -f "target/${target}/release/${lib_name}"
+done
+
+lipo -create \
+  -output "${staging_root}/ios-simulator/${lib_name}" \
+  "target/aarch64-apple-ios-sim/release/${lib_name}" \
+  "target/x86_64-apple-ios/release/${lib_name}"
+
+lipo -create \
+  -output "${staging_root}/macos/${lib_name}" \
+  "target/aarch64-apple-darwin/release/${lib_name}" \
+  "target/x86_64-apple-darwin/release/${lib_name}"
+
+xcodebuild -create-xcframework \
+  -library "target/aarch64-apple-ios/release/${lib_name}" -headers "${headers_dir}" \
+  -library "${staging_root}/ios-simulator/${lib_name}" -headers "${headers_dir}" \
+  -library "${staging_root}/macos/${lib_name}" -headers "${headers_dir}" \
+  -output "$(swift_sdk_xcframework_path)"
+
+(cd "${package_root}" && swift package describe >/dev/null)
+
+echo "Swift SDK package generated at ${package_root}"

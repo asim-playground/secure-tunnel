@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+#MISE description="Run Swift package session smoke on iOS Simulator"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+# shellcheck disable=SC1091
+# shellcheck source=../smoke-common.sh
+source mise-tasks/sdk/smoke-common.sh
+# shellcheck disable=SC1091
+# shellcheck source=common.sh
+source mise-tasks/sdk/swift/common.sh
+
+swift_sdk_require_darwin
+if [[ "${SECURE_TUNNEL_SWIFT_SKIP_PACKAGE:-0}" != "1" ]]; then
+  mise run sdk:swift:package
+fi
+
+package_root="$(swift_sdk_package_root)"
+fixture_json="$(mktemp "${TMPDIR:-/tmp}/secure-tunnel-swift-ios-fixture.XXXXXX.json")"
+trap 'stop_secure_tunnel_fixture; rm -f "${fixture_json}"' EXIT
+
+start_secure_tunnel_fixture "${fixture_json}"
+cp "${fixture_json}" \
+  "${package_root}/Tests/SecureTunnelPackageTests/Resources/binding-fixture.json"
+
+simulator_udid="$(swift_sdk_find_simulator_udid)"
+scheme="$(swift_sdk_xcode_scheme "${package_root}")"
+derived_data="${MISE_PROJECT_ROOT}/target/sdk/swift/DerivedData"
+
+(
+  cd "${package_root}"
+  env -u LIBRARY_PATH xcodebuild test \
+    -scheme "${scheme}" \
+    -destination "id=${simulator_udid}" \
+    -derivedDataPath "${derived_data}" \
+    CODE_SIGNING_ALLOWED=NO
+)

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+#MISE description="Check the generated Swift SDK package artifact layout"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+# shellcheck disable=SC1091
+# shellcheck source=common.sh
+source mise-tasks/sdk/swift/common.sh
+
+swift_sdk_require_darwin
+if [[ "${SECURE_TUNNEL_SWIFT_SKIP_PACKAGE:-0}" != "1" ]]; then
+  mise run sdk:swift:package
+fi
+
+package_root="$(swift_sdk_package_root)"
+xcframework="$(swift_sdk_xcframework_path)"
+info_plist="${xcframework}/Info.plist"
+headers_count="$(find "${xcframework}" -path '*/Headers/secure_tunnel_sdk_ffiFFI.h' | wc -l | tr -d ' ')"
+modulemap_count="$(find "${xcframework}" -path '*/Headers/module.modulemap' | wc -l | tr -d ' ')"
+
+test -f "${package_root}/Package.swift"
+test -f "${package_root}/Sources/SecureTunnel/SecureTunnel.swift"
+test -f "${package_root}/Sources/SecureTunnel/secure_tunnel_sdk_ffi.swift"
+test -d "${xcframework}"
+test -f "${info_plist}"
+test "${headers_count}" -ge 3
+test "${modulemap_count}" -ge 3
+
+plutil -lint "${info_plist}" >/dev/null
+grep -R "module secure_tunnel_sdk_ffiFFI" "${xcframework}" >/dev/null
+find "${xcframework}" -name 'libsecure_tunnel_sdk_ffi.a' -print -quit | grep . >/dev/null
+
+(cd "${package_root}" && swift package describe >/dev/null)
+
+echo "Swift SDK package checks passed at ${package_root}"

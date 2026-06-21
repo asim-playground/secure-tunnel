@@ -79,7 +79,7 @@ a future task proves concrete product need.
 - backlog/tasks/task-00000018_define-product-sdk-facade-and-session-contract.md
 - backlog/tasks/completed/task-00000021_build-end-to-end-tunnel-harness-and-cli-smoke-path.md
 - backlog/tasks/completed/task-00000022_add-observability-and-conformance-test-matrix.md
-- backlog/tasks/task-00000024_package-swift-sdk-as-swiftpm-and-xcframework.md
+- backlog/tasks/completed/task-00000024_package-swift-sdk-as-swiftpm-and-xcframework.md
 - backlog/plans/plan-00000002_product-secure-tunnel-sdk-and-bindings.md
 
 ## Reference Tasks

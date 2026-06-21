@@ -4,6 +4,9 @@ set -euo pipefail
 
 mise run build-all
 mise run sdk:check-bindings
+if [[ "$(uname -s)" == "Darwin" && "${SECURE_TUNNEL_SKIP_SWIFT_SDK_TESTS:-0}" != "1" ]]; then
+  mise run sdk:swift
+fi
 mise run lint-all
 mise run test-all
 mise run smoke

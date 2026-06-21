@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+#MISE description="Run end-to-end smoke through the SwiftPM package on macOS"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+# shellcheck disable=SC1091
+# shellcheck source=../smoke-common.sh
+source mise-tasks/sdk/smoke-common.sh
+# shellcheck disable=SC1091
+# shellcheck source=common.sh
+source mise-tasks/sdk/swift/common.sh
+
+swift_sdk_require_darwin
+if [[ "${SECURE_TUNNEL_SWIFT_SKIP_PACKAGE:-0}" != "1" ]]; then
+  mise run sdk:swift:package
+fi
+
+consumer_root="$(swift_sdk_consumer_root)"
+fixture_json="$(mktemp "${TMPDIR:-/tmp}/secure-tunnel-swift-package-fixture.XXXXXX.json")"
+trap 'stop_secure_tunnel_fixture; rm -f "${fixture_json}"' EXIT
+
+swift_sdk_remove_under_target "${consumer_root}"
+mkdir -p "${consumer_root}/Sources/SecureTunnelSmoke"
+cat >"${consumer_root}/Package.swift" <<'SWIFT'
+// swift-tools-version: 5.10
+import PackageDescription
+
+let package = Package(
+    name: "SecureTunnelConsumer",
+    platforms: [
+        .macOS(.v11),
+    ],
+    dependencies: [
+        .package(path: "../SecureTunnel"),
+    ],
+    targets: [
+        .executableTarget(
+            name: "SecureTunnelSmoke",
+            dependencies: [
+                .product(name: "SecureTunnel", package: "SecureTunnel"),
+            ],
+            path: "Sources/SecureTunnelSmoke"
+        ),
+    ]
+)
+SWIFT
+cp bindings/swift/Smoke/SecureTunnelSmoke/main.swift \
+  "${consumer_root}/Sources/SecureTunnelSmoke/main.swift"
+
+start_secure_tunnel_fixture "${fixture_json}"
+(
+  cd "${consumer_root}"
+  swift run SecureTunnelSmoke "${fixture_json}"
+)

@@ -153,6 +153,10 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: mise run test
+      - name: Run Swift SDK package smoke
+        if: runner.os == 'macOS'
+        shell: bash
+        run: mise run sdk:swift
       - name: Run Rust workspace tests
         if: runner.os == 'Windows'
         shell: bash

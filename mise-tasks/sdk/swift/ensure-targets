@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+#MISE description="Install Rust Apple targets required for Swift SDK packaging"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+# shellcheck disable=SC1091
+# shellcheck source=common.sh
+source mise-tasks/sdk/swift/common.sh
+
+swift_sdk_require_darwin
+toolchain="${RUSTUP_TOOLCHAIN:-$(rustc -V | awk '{print $2}')}"
+cargo_bin_dir="$(dirname "$(command -v cargo)")"
+
+if [[ -x "${cargo_bin_dir}/rustup" ]]; then
+  rustup_bin="${cargo_bin_dir}/rustup"
+elif command -v rustup >/dev/null 2>&1; then
+  rustup_bin="$(command -v rustup)"
+else
+  echo "rustup not found; install the pinned Rust toolchain via mise first" >&2
+  exit 1
+fi
+
+"${rustup_bin}" target add \
+  aarch64-apple-darwin \
+  x86_64-apple-darwin \
+  aarch64-apple-ios \
+  aarch64-apple-ios-sim \
+  x86_64-apple-ios \
+  --toolchain "${toolchain}"
