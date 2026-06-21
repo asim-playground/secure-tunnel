@@ -83,15 +83,15 @@ complete the same inner secure session over either carrier.
 ## Task Dependencies
 
 - backlog/tasks/task-00000005_define-rust-crate-boundaries-and-secure-channel-api.md
-- backlog/tasks/task-00000008_write-transport-agnostic-v1-protocol-plus-quic-and-wss-bindings.md
-- backlog/tasks/task-00000009_define-udp-first-deployment-and-observability-requirements.md
+- backlog/tasks/completed/task-00000008_write-transport-agnostic-v1-protocol-plus-quic-and-wss-bindings.md
+- backlog/tasks/completed/task-00000009_define-udp-first-deployment-and-observability-requirements.md
 - backlog/tasks/completed/task-00000010_implement-framed-duplex-abstraction-and-transport-selector.md
 - backlog/tasks/task-00000011_prototype-server-auth-noise-handshake-and-trust-verification-on-transport-neutral-frames.md
 - backlog/plans/plan-00000001_secure-channel-foundation.md
 
 ## Reference Tasks
 
-- backlog/tasks/task-00000009_define-udp-first-deployment-and-observability-requirements.md
+- backlog/tasks/completed/task-00000009_define-udp-first-deployment-and-observability-requirements.md
 
 ## Backlog Bookkeeping
 

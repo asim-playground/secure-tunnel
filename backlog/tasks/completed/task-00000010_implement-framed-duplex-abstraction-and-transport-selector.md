@@ -30,8 +30,8 @@ The first proving slice should establish the seam that all later network code de
 ## Task Dependencies
 
 - backlog/tasks/task-00000005_define-rust-crate-boundaries-and-secure-channel-api.md
-- backlog/tasks/task-00000007_define-transport-selection-and-fallback-policy.md
-- backlog/tasks/task-00000008_write-transport-agnostic-v1-protocol-plus-quic-and-wss-bindings.md
+- backlog/tasks/completed/task-00000007_define-transport-selection-and-fallback-policy.md
+- backlog/tasks/completed/task-00000008_write-transport-agnostic-v1-protocol-plus-quic-and-wss-bindings.md
 - backlog/plans/plan-00000001_secure-channel-foundation.md
 
 ## Acceptance Closure

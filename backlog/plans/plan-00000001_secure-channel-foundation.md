@@ -12,7 +12,7 @@ superseded_by: []
 - Date: `2026-03-14`
 - Status: `active`
 - Owner: `Asim Ihsan`
-- Related Plans: `none`
+- Related Plans: `plan-00000002`
 - Related Tasks: `task-00000001, task-00000003, task-00000004, task-00000005, task-00000006, task-00000007, task-00000008, task-00000009, task-00000010, task-00000011, task-00000012, task-00000013, task-00000014, task-00000015, task-00000016`
 
 ## Summary
@@ -96,9 +96,13 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 
 ### Deployment and observability
 
-- Missing: repo-local operational guidance for UDP-first rollout, `QUIC` address-validation posture, fallback telemetry, and migration-related testing.
-- Impact: implementation could land without the metrics and runbook assumptions needed to operate `QUIC` safely on hostile or degraded networks.
-- Notes: the later research calls deployment and observability first-class once `QUIC` is in scope.
+- Status: active repo-local guidance now defines UDP-first rollout,
+  `QUIC` address-validation and Retry posture, fallback telemetry, migration
+  and close validation, privacy-safe metrics, dashboards, and rollout blockers.
+- Remaining impact: future implementation tasks must turn this guidance into
+  concrete Rust report types, conformance fixtures, and CI coverage.
+- Notes: `backlog/docs/v1-udp-first-deployment-and-observability.md` is the
+  active source of truth for deployment and observability requirements.
 
 ### Enterprise network compatibility
 
@@ -132,15 +136,15 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
   - `Phase 0` is complete: the baseline v1 decisions, device policy, and
     historical protocol spec are captured and the active `v1-*` docs now carry
     the implementation-facing source of truth.
-  - `Phase 1` is in progress: the active transport-policy and
-    protocol/binding docs cover much of tasks `00000007` and `00000008`,
-    `task-00000001` now provides the starter crate set for the first prototype
-    slices, and `task-00000009` remains only partially addressed.
+  - `Phase 1` is complete: the active transport-policy, protocol/binding,
+    descriptor, device-policy, and UDP-first deployment/observability docs
+    have all been accepted through the backlog workflow.
   - `Phase 2` now has `task-00000010`, `task-00000011`, `task-00000012`, and
     `task-00000015` complete: the shared selector, framed-duplex seam, trust
     verification path, transport prototype harness, portability work, and
-    CI-stability updates are in place. `Phase 3` is now the active slice for
-    managed-network compatibility.
+    CI-stability updates are in place. `Phase 3` remains the managed-network
+    compatibility slice, but implementation now depends on the production
+    carrier adapter work tracked by follow-on plan `00000002`.
 
 ### Phase 0 - `lock v1 decisions`
 
@@ -206,16 +210,16 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 | task-`00000004` | `write v1 core protocol spec and wss binding` | `Phase 0` | `task-00000003, task-00000006` | `completed` |
 | task-`00000005` | `define rust crate boundaries and secure-channel api` | `Phase 1` | `task-00000001, task-00000006, task-00000007, task-00000008` | `completed` |
 | task-`00000006` | `define device enrollment and known-device policy` | `Phase 0` | `task-00000003` | `completed` |
-| task-`00000007` | `define transport selection and fallback policy` | `Phase 1` | `task-00000003, task-00000004, task-00000006` | `proposed` |
-| task-`00000008` | `write transport-agnostic v1 protocol plus quic and wss bindings` | `Phase 1` | `task-00000003, task-00000004, task-00000006, task-00000007` | `proposed` |
-| task-`00000009` | `define udp-first deployment and observability requirements` | `Phase 1` | `task-00000007, task-00000008` | `proposed` |
+| task-`00000007` | `define transport selection and fallback policy` | `Phase 1` | `task-00000003, task-00000004, task-00000006` | `completed` |
+| task-`00000008` | `write transport-agnostic v1 protocol plus quic and wss bindings` | `Phase 1` | `task-00000003, task-00000004, task-00000006, task-00000007` | `completed` |
+| task-`00000009` | `define udp-first deployment and observability requirements` | `Phase 1` | `task-00000007, task-00000008` | `completed` |
 | task-`00000010` | `implement framed duplex abstraction and transport selector` | `Phase 2` | `task-00000005, task-00000007, task-00000008` | `completed` |
 | task-`00000011` | `prototype server-auth noise handshake and trust verification on transport-neutral frames` | `Phase 2` | `task-00000005, task-00000008, task-00000010` | `completed` |
 | task-`00000015` | `stabilize ci portability and add docker repro` | `Phase 2` | `task-00000011` | `completed` |
 | task-`00000012` | `prototype quic-preferred transport with wss fallback and local secure session` | `Phase 2` | `task-00000005, task-00000008, task-00000009, task-00000010, task-00000011` | `completed` |
 | task-`00000016` | `update runtimes deps and add swift callable library surface` | `Phase 2` | `task-00000005, task-00000015` | `completed` |
-| task-`00000013` | `allow optional custom ca cert for intercepted wss or quic` | `Phase 3` | `task-00000009, task-00000012` | `proposed` |
-| task-`00000014` | `allow optional http proxy for wss client` | `Phase 3` | `task-00000009, task-00000012, task-00000013` | `proposed` |
+| task-`00000013` | `allow optional custom ca cert for intercepted wss or quic` | `Phase 3` | `task-00000009, task-00000012, task-00000019` | `proposed` |
+| task-`00000014` | `allow optional http proxy for wss client` | `Phase 3` | `task-00000009, task-00000012, task-00000013, task-00000019` | `proposed` |
 
 ## Dependency Notes
 
@@ -225,16 +229,21 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 - `task-00000009` also remains an advisory input for `task-00000011` so the
   first trust-verification prototype emits compatible failure distinctions, but
   deployment guidance should not block a local transport-neutral proof slice.
-- `task-00000007` and `task-00000008` still show `proposed` because the active
-  docs already exist as active implementation-facing artifacts, but the
-  backlog acceptance workflow for those tasks has not yet been explicitly
-  closed.
+- `task-00000007`, `task-00000008`, and `task-00000009` are now completed
+  backlog tasks. The active v1 docs remain the source of truth for transport
+  selection, protocol bindings, descriptor shape, device policy, and UDP-first
+  deployment/observability.
 - `task-00000013` and `task-00000014` intentionally land after
-  `task-00000012` so private-CA and proxy compatibility can target the first
-  real `WSS` and `QUIC` client adapters rather than the earlier mock seams.
+  `task-00000012` and the production-adapter work in `task-00000019` so
+  private-CA and proxy compatibility can target real `WSS` and `QUIC` client
+  adapters rather than the earlier prototype harness.
 - `task-00000014` depends on `task-00000013` so proxy-path work reuses the
   first custom-CA config decisions instead of inventing a second overlapping
   outer-TLS trust surface.
+- `task-00000013` and `task-00000014` now also depend on
+  `task-00000019` from plan `00000002` so managed-network compatibility is
+  implemented against production carrier adapters rather than the earlier
+  prototype harness.
 
 ## Validation Strategy
 
@@ -260,15 +269,15 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 | Question | Needed By | Owner | Resolution |
 |---|---|---|---|
 | How much of the framing and session envelope should be transport-agnostic from day one? | before task-00000005 completes | Asim Ihsan | `resolved by task-00000005` |
-| What exact attestation evidence schema should the protocol standardize beyond the current opaque optional enrollment payload? | before task-00000008 completes | Asim Ihsan | `open` |
+| What exact attestation evidence schema should the protocol standardize beyond the current opaque optional enrollment payload? | before task-00000008 completes | Asim Ihsan | `resolved: v1 supports optional opaque/enveloped attestation evidence during encrypted enrollment finish; platform-specific App Attest schema is deferred` |
 
 ## Immediate Next Actions
 
-1. Close the acceptance workflow for the active `v1-*` transport-policy and protocol/binding docs represented by tasks `00000007` and `00000008`, and finish the remaining deployment/observability guidance for `task-00000009`.
-2. Begin `task-00000012` on top of the completed selector and transport-neutral secure-ready prototype from tasks `00000010` and `00000011`.
-3. After the first real client adapters exist, schedule `task-00000013` and
-   `task-00000014` to cover private-CA and proxied-`WSS` operation on managed
-   networks.
+1. Continue into plan `00000002` with `task-00000017` and `task-00000018` so
+   the Rust SDK facade is shaped before native package work expands.
+2. After production carrier adapters exist through `task-00000019`, schedule
+   `task-00000013` and `task-00000014` to cover private-CA and proxied-`WSS`
+   operation on managed networks.
 
 ## Implementation Notes
 
@@ -280,12 +289,17 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 - The later research clarification in `backlog/docs/historical/2026-03-14_initial-research.md` supersedes the WSS-first execution plan and requires new Phase 1 tasks for transport selection, `QUIC` binding, `WSS` fallback, and UDP-first operations.
 - The active implementation-facing docs now live under stable `v1-*` filenames,
   including threat model, transport policy, service descriptor, shared
-  protocol, glossary, and device policy artifacts.
+  protocol, UDP-first deployment/observability, glossary, and device policy
+  artifacts.
 - `2026-03-15`: phase tracking refreshed so the plan status is `active`,
   `Phase 0` is marked complete, and `Phase 1` is explicitly identified as the
-  current active phase while tasks `00000007` and `00000008` remain open for
-  backlog workflow closure and `task-00000009` remains only partially covered
-  by the current active docs.
+  current active phase. At that time, tasks `00000007` and `00000008` were
+  still open for backlog workflow closure and `task-00000009` was only
+  partially covered by the active docs.
+- `2026-06-21`: `task-00000007`, `task-00000008`, and `task-00000009` were
+  completed. `backlog/docs/v1-udp-first-deployment-and-observability.md` now
+  closes the UDP-first deployment and observability gap, and the App Attest
+  protocol question is resolved as optional opaque enrollment evidence for v1.
 - `2026-03-15`: `task-00000001` completed with
   `backlog/docs/2026-03-15_starter-crate-recommendations.md`, which locks the
   first-choice Phase 2 crate stack and records which dependency decisions are
@@ -322,3 +336,6 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 - `2026-03-14` `Initial plan created from the research note and bootstrap backlog state.`
 - `2026-03-14` `Plan updated after later research clarification to treat raw QUIC as the preferred outer transport and WSS as fallback, with one unchanged inner protocol.`
 - `2026-03-15` `Refreshed phase tracking to mark Phase 0 complete, set the plan status to active, and identify Phase 1 as the current execution phase.`
+- `2026-06-21` `Linked plan-00000002 as the follow-on product SDK and native binding plan after task-00000016.`
+- `2026-06-21` `Aligned managed-network task dependencies with plan-00000002 production carrier adapter work.`
+- `2026-06-21` `Completed the backlog workflow for tasks 00000007, 00000008, and 00000009.`

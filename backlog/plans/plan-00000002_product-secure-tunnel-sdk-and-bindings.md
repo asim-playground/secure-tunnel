@@ -1,0 +1,432 @@
+---
+status: draft
+normative: false
+supersedes: []
+superseded_by: []
+---
+
+# Plan `00000002` - `product secure tunnel sdk and bindings`
+
+## Metadata
+
+- Date: `2026-06-21`
+- Status: `draft`
+- Owner: `Asim Ihsan`
+- Related Plans: `plan-00000001`
+- Related Tasks: `task-00000007, task-00000008, task-00000009, task-00000013, task-00000014, task-00000017, task-00000018, task-00000019, task-00000020, task-00000021, task-00000022, task-00000023, task-00000024, task-00000025, task-00000026, task-00000027, task-00000028, task-00000029`
+
+## Summary
+
+This plan turns the current Secure Tunnel foundation into a product-ready Rust
+library with SDKs for Swift/iOS, Kotlin, Python, Flutter/Dart, and Go. The
+previous plan proved the v1 protocol direction, transport selector, Noise trust
+path, QUIC/WSS prototype harness, and a narrow manual C ABI that Swift and Go
+can import. The next work is to complete real transport/session behavior,
+stabilize the Rust SDK facade, and then package language-specific SDKs from
+that facade. UniFFI remains the default generated path for Swift, Kotlin, and
+Python; Flutter/Dart and Go get first-class paths that still share the same
+Rust facade and behavior.
+
+## Decision Summary (Locked)
+
+- [x] Keep `secure-tunnel-core` as the pure Rust implementation boundary; do
+      not bake Swift, Kotlin, or Python assumptions into core protocol modules.
+- [x] Use UniFFI as the default cross-language SDK path for Swift, Kotlin, and
+      Python, with a pinned project-local bindgen binary.
+- [x] Keep the existing manual C ABI as a bootstrap and compatibility layer
+      until UniFFI packaging, import, and smoke tests pass for all required
+      targets.
+- [x] Expose a deliberately small SDK surface: owned records, byte arrays,
+      strings, explicit errors, coarse operations, and opaque session objects.
+- [x] Keep hot loops inside Rust. Do not expose per-frame transport internals
+      or hundreds of tiny getters across the foreign boundary.
+- [x] Make Swift/iOS the first production-grade SDK package target.
+- [x] Treat Flutter/Dart as a first-class follow-on SDK target using the Rust
+      facade and Flutter-specific bridge packaging, not UniFFI.
+- [x] Treat Go as a first-class follow-on SDK target over the manual C ABI and
+      cbindgen-generated header, not UniFFI.
+- [x] Keep native Go as the supported Go SDK path and deprecate or delete the
+      existing Go-WASM scaffold unless a future task proves a concrete need.
+
+## Goals
+
+- Complete the Rust client library path from descriptor/config through carrier
+  selection, `Secure Ready`, account/device session establishment, application
+  records, observability, and graceful close.
+- Replace test-only transport prototypes with production carrier adapters for
+  raw `QUIC` and `WSS`, while preserving the existing fallback semantics.
+- Define a stable Rust SDK facade that generated bindings can call without
+  exposing internal protocol, selector, or transport types directly.
+- Add a UniFFI facade crate and generated Swift, Kotlin, and Python bindings
+  with project-pinned generator tooling.
+- Package native SDK artifacts: SwiftPM/XCFramework first, then Android/JVM
+  artifacts and Python wheels or a documented Python bridge path.
+- Package Flutter/Dart and Go SDKs over the same Rust facade after the Swift
+  path proves the production packaging shape.
+- Add CI and smoke tests that prove each package can be imported and can run at
+  least one descriptor/config/session scenario.
+
+## Non-Goals
+
+- Reopen the v1 security model, trust-anchor model, or `QUIC`-preferred plus
+  `WSS` fallback decision.
+- Replace every existing binding surface in one step. The manual C ABI and
+  current Python/Go scaffolds can remain while the UniFFI path proves itself.
+- Force-fitting UniFFI onto Flutter/Dart or Go. Those targets use different
+  binding strategies while preserving the same Rust facade behavior.
+- Expose the whole Rust API to foreign languages.
+- Ship app-store-ready mobile apps or a hosted production service.
+- Optimize for extremely high-frequency FFI calls before measuring a real
+  boundary-call workload.
+
+## Current State / Baseline
+
+- `plan-00000001` is active and has completed the major proving slices through
+  `task-00000016`.
+- The Rust workspace has `secure-tunnel-core`, a CLI, a manual C ABI crate
+  named `secure-tunnel-ffi`, a PyO3 Python crate, and Go/Go-WASM binding
+  scaffolds. Go-WASM is now planned for deprecation or deletion rather than
+  supported SDK status.
+- The manual C ABI currently exposes protocol constants and service descriptor
+  JSON validation/normalization, with `crates/go/binding.h` and
+  `crates/go/module.modulemap` tracked for Swift import groundwork.
+- The current Rust core can build a v1 descriptor, derive the Noise prologue,
+  plan QUIC-first fallback candidates, evaluate `Secure Ready` over framed I/O,
+  and test prototype QUIC/WSS behavior in a test-only harness.
+- Real client carrier adapters, account login, known-device session behavior,
+  production server/harness wiring, and native SDK packages are not yet done.
+- `crates/core/src/selector.rs`, `crates/core/src/noise.rs`, and
+  `crates/core/src/prototype_transport.rs` exceed the repo's 500-line
+  non-Markdown code-file review threshold and should be decomposed before SDK
+  expansion.
+- Local reference material is available for SDK implementation:
+  - `backlog/docs/2026-06-21_sdk-reference-repositories.md`
+  - `/Users/asimi/Downloads/references/uniffi-rs`
+  - `/Users/asimi/Downloads/references/application-services`
+  - `/Users/asimi/workplace/flutter_template`
+  - `/Users/asimi/Downloads/references/flutter_rust_bridge`
+  - `/Users/asimi/Downloads/references/dart-native`
+  - `/Users/asimi/Downloads/references/cbindgen`
+  - `/Users/asimi/Downloads/references/pyo3`
+
+## Gap Analysis
+
+### Foundation closure
+
+- Status: tasks `00000007`, `00000008`, and `00000009` are completed and the
+  active `v1-*` docs now cover transport selection, protocol bindings,
+  descriptor shape, device policy, and UDP-first deployment/observability.
+- Remaining impact: the next SDK gate is code decomposition, not unresolved
+  protocol or deployment documentation.
+- Notes: `task-00000017` should land before defining the SDK facade.
+
+### Core decomposition
+
+- Missing: large selector, Noise, and prototype transport modules remain above
+  the code-file size threshold.
+- Impact: the SDK facade could freeze awkward module boundaries and make later
+  security or transport review harder.
+- Notes: decomposition should preserve behavior first; public API redesign
+  belongs only where it helps the SDK facade.
+
+### Production transport and session behavior
+
+- Missing: production `QUIC` and `WSS` connectors, outer TLS configuration,
+  HTTP proxy support, account login, known-device auth, cancellation, retry, and
+  graceful close behavior above prototype coverage.
+- Impact: Swift/Kotlin/Python packages would be importable but not yet useful
+  for a real client.
+- Notes: managed-network tasks `00000013` and `00000014` should land after the
+  first real adapters exist so their tests exercise actual carrier code.
+
+### Foreign SDK boundary
+
+- Missing: a stable Rust SDK facade and a dedicated UniFFI crate.
+- Impact: exposing internal core types now would leak transport internals,
+  create churn across language bindings, and make UniFFI upgrade breaks more
+  expensive.
+- Notes: prefer a UDL contract for the first SDK pass because reviewers can
+  read it as a language-neutral API spec.
+
+### Packaging and CI
+
+- Missing: generated binding output, SwiftPM/XCFramework packaging, Android or
+  JVM packaging, Python wheel/import strategy, Flutter/Dart bridge packaging,
+  Go package stabilization, and package-level smoke tests.
+- Impact: generated bindings alone will not prove the SDK can be consumed by
+  real downstream projects.
+- Notes: packaging remains repo-owned work; UniFFI only generates binding code.
+
+### Flutter/Dart and Go SDKs
+
+- Missing: first-class Flutter/Dart and Go packaging plans tied to the same Rust
+  SDK facade.
+- Impact: downstream app work could fork behavior away from the Swift/Kotlin/
+  Python SDK or keep relying on scaffold-era Go wrappers.
+- Notes: use `flutter_template`, `flutter_rust_bridge`, and `dart-native` for
+  Flutter/Dart reference patterns; use the existing manual C ABI and `cbindgen`
+  for Go.
+
+## Strategy
+
+- Close foundation planning gaps first, then split oversized core modules
+  before growing the public SDK surface.
+- Define a Rust SDK facade crate or module before UniFFI. This facade owns
+  `ClientConfig`, `BootstrapDescriptor`, `SecureTunnelClient`, `Session`,
+  explicit error enums, cancellation handles, and coarse result/report records.
+- Add a separate `secure-tunnel-sdk-ffi` crate for UniFFI. It depends on the
+  Rust SDK facade and contains no transport business logic.
+- Default to a UDL-defined UniFFI contract for the first generated SDK because
+  the language-neutral file is easier to review than scattered macro exports.
+- Make Swift/iOS the first production package target. Kotlin and Python should
+  keep import/build parity, but Swift drives the first full packaging bar.
+- Add Flutter/Dart through a separate bridge package over the Rust SDK facade,
+  with Flutter Rust Bridge as the recommended first path and direct Dart FFI
+  plus `ffigen` as the comparison point.
+- Keep Go on the stable manual C ABI path with cbindgen drift checks, because
+  UniFFI does not cover Go.
+- Keep the manual C ABI in place until the generated Swift, Kotlin, and Python
+  packages and the Go package pass import/build smoke tests and at least one
+  end-to-end scenario.
+- Own packaging explicitly in CI: build native Rust libraries for each target,
+  generate bindings with pinned bindgen, assemble native packages, and run
+  language-level smoke tests.
+- Treat boundary-call performance as a measured risk. Start with coarse
+  operations and opaque sessions; only introduce lower-level APIs when tests or
+  product requirements prove they are needed.
+
+## Phase Plan
+
+- Current Phase: `Phase 0 - close foundation gates`
+
+### Phase 0 - `close foundation gates`
+
+- Objective: remove stale planning and review blockers before public SDK work.
+- Candidate Tasks:
+    - `task-00000007` `define transport selection and fallback policy`
+    - `task-00000008` `write transport-agnostic v1 protocol plus quic and wss bindings`
+    - `task-00000009` `define udp-first deployment and observability requirements`
+    - `task-00000017` `decompose core modules before sdk expansion`
+- Exit Criteria:
+    - [x] active protocol, selection, and deployment docs are aligned with the
+          code and task acceptance workflow.
+    - [ ] all non-Markdown code files touched by the SDK plan are at or below
+          500 lines, or have an explicit reviewed decomposition exception.
+    - [ ] `mise run dev` passes after the decomposition.
+
+### Phase 1 - `complete the Rust tunnel library`
+
+- Objective: make the Rust library useful before binding it to native SDKs.
+- Candidate Tasks:
+    - `task-00000018` `define product sdk facade and session contract`
+    - `task-00000019` `implement production quic and wss carrier adapters`
+    - `task-00000020` `implement account and device session protocol`
+    - `task-00000021` `build end-to-end tunnel harness and cli smoke path`
+- Exit Criteria:
+    - [ ] a Rust caller can create a client, load a descriptor/config, connect,
+          reach `Secure Ready`, authenticate, exchange application records, and
+          close cleanly.
+    - [ ] both `QUIC` success and `WSS` fallback run through production
+          adapters, not only test-only prototype transports.
+    - [ ] local end-to-end tests cover success, fallback, inner trust failure,
+          and graceful close.
+
+### Phase 2 - `managed network and observability`
+
+- Objective: make the library operable in the network environments the v1
+  design already calls out.
+- Candidate Tasks:
+    - `task-00000013` `allow optional custom ca cert for intercepted wss or quic`
+    - `task-00000014` `allow optional http proxy for wss client`
+    - `task-00000022` `add observability and conformance test matrix`
+- Exit Criteria:
+    - [ ] custom outer-TLS CA configuration works without weakening inner Noise
+          trust.
+    - [ ] proxied `WSS` works as a fallback path without creating a separate
+          security model.
+    - [ ] events and metrics distinguish outer path failure, outer TLS/proxy
+          failure, fallback, inner trust failure, session failure, and close.
+
+### Phase 3 - `generate the common SDK bindings`
+
+- Objective: introduce one small UniFFI facade for Swift, Kotlin, and Python.
+- Candidate Tasks:
+    - `task-00000023` `create uniffi sdk facade and bindgen tooling`
+- Exit Criteria:
+    - [ ] `uniffi` and the project-local bindgen binary are pinned in the
+          workspace dependency graph.
+    - [ ] generated Swift, Kotlin, and Python bindings expose only the approved
+          SDK facade.
+    - [ ] generated bindings pass language-level import/build smoke tests.
+
+### Phase 4 - `package native SDKs`
+
+- Objective: ship consumable Swift, Kotlin, and Python artifacts rather than
+  raw generated source, with Swift/iOS as the first production-grade package.
+- Candidate Tasks:
+    - `task-00000024` `package swift sdk as swiftpm and xcframework`
+    - `task-00000025` `package kotlin sdk as jvm or android artifact`
+    - `task-00000026` `package python sdk from the shared rust facade`
+- Exit Criteria:
+    - [ ] Swift/iOS is the first production-grade SDK package and can run a
+          descriptor/session smoke test.
+    - [ ] Kotlin can import the artifact and run the same scenario through JNA
+          or the documented UniFFI backend.
+    - [ ] Python can import the package and run the same scenario, with a clear
+          decision on whether UniFFI replaces or wraps the existing PyO3 path.
+    - [ ] Kotlin and Python are at least at generated-binding and package smoke
+          parity before release CI treats them as supported SDK targets.
+
+### Phase 5 - `package Flutter and Go SDKs`
+
+- Objective: add Flutter/Dart and Go SDKs without changing the Rust product
+  facade or the Swift-first packaging decision.
+- Candidate Tasks:
+    - `task-00000028` `package flutter dart sdk using rust facade`
+    - `task-00000029` `package go sdk over stable c abi`
+- Exit Criteria:
+    - [ ] Flutter/Dart can import the package and run a descriptor/session smoke
+          test through a hand-written facade over generated bridge code.
+    - [ ] Go can import the package and run a descriptor/session smoke test over
+          the stable C ABI.
+    - [ ] Flutter/Dart and Go package checks share the same fixture semantics
+          as Swift, Kotlin, and Python.
+
+### Phase 6 - `release SDKs`
+
+- Objective: version, build, and archive the supported SDK artifacts
+  reproducibly.
+- Candidate Tasks:
+    - `task-00000027` `add sdk release ci and versioning`
+- Exit Criteria:
+    - [ ] CI builds and archives package artifacts with versioned outputs.
+    - [ ] stale generated bindings and stale package metadata fail release
+          checks.
+    - [ ] release docs identify which targets are production-grade versus smoke
+          parity.
+
+## Backlog Task Map
+
+| Task ID | Title | Phase | Depends On | Status |
+|---|---|---|---|---|
+| task-`00000007` | `define transport selection and fallback policy` | `Phase 0` | `task-00000003, task-00000004, task-00000006` | `completed` |
+| task-`00000008` | `write transport-agnostic v1 protocol plus quic and wss bindings` | `Phase 0` | `task-00000007` | `completed` |
+| task-`00000009` | `define udp-first deployment and observability requirements` | `Phase 0` | `task-00000007, task-00000008` | `completed` |
+| task-`00000017` | `decompose core modules before sdk expansion` | `Phase 0` | `task-00000016` | `proposed` |
+| task-`00000018` | `define product sdk facade and session contract` | `Phase 1` | `task-00000007, task-00000008, task-00000009, task-00000017` | `proposed` |
+| task-`00000019` | `implement production quic and wss carrier adapters` | `Phase 1` | `task-00000012, task-00000018` | `proposed` |
+| task-`00000020` | `implement account and device session protocol` | `Phase 1` | `task-00000006, task-00000011, task-00000018` | `proposed` |
+| task-`00000021` | `build end-to-end tunnel harness and cli smoke path` | `Phase 1` | `task-00000019, task-00000020` | `proposed` |
+| task-`00000013` | `allow optional custom ca cert for intercepted wss or quic` | `Phase 2` | `task-00000009, task-00000012, task-00000019` | `proposed` |
+| task-`00000014` | `allow optional http proxy for wss client` | `Phase 2` | `task-00000009, task-00000012, task-00000013, task-00000019` | `proposed` |
+| task-`00000022` | `add observability and conformance test matrix` | `Phase 2` | `task-00000009, task-00000013, task-00000014, task-00000021` | `proposed` |
+| task-`00000023` | `create uniffi sdk facade and bindgen tooling` | `Phase 3` | `task-00000018, task-00000021, task-00000022` | `proposed` |
+| task-`00000024` | `package swift sdk as swiftpm and xcframework` | `Phase 4` | `task-00000022, task-00000023` | `proposed` |
+| task-`00000025` | `package kotlin sdk as jvm or android artifact` | `Phase 4` | `task-00000022, task-00000023` | `proposed` |
+| task-`00000026` | `package python sdk from the shared rust facade` | `Phase 4` | `task-00000022, task-00000023` | `proposed` |
+| task-`00000028` | `package flutter dart sdk using rust facade` | `Phase 5` | `task-00000018, task-00000021, task-00000022, task-00000024` | `proposed` |
+| task-`00000029` | `package go sdk over stable c abi` | `Phase 5` | `task-00000016, task-00000018, task-00000021, task-00000022, task-00000024` | `proposed` |
+| task-`00000027` | `add sdk release ci and versioning` | `Phase 6` | `task-00000022, task-00000024, task-00000025, task-00000026, task-00000028, task-00000029` | `proposed` |
+
+## Validation Strategy
+
+- Unit/Integration: Rust unit and integration tests for descriptor validation,
+  connect planning, QUIC/WSS adapters, Noise trust, account/device messages,
+  cancellation, close, and failure classification.
+- CLI/manual checks: `mise run dev`, `mise run ci`, local CLI tunnel smoke
+  tests, and language-package import smoke tests.
+- Package checks:
+  - Swift: build package/XCFramework and run an import plus descriptor/session
+    smoke test. Swift/iOS is the first production-grade package target.
+  - Kotlin: build generated bindings plus native library packaging and run a
+    JVM or Android smoke test.
+  - Python: build wheel or package layout and run an import plus smoke test in
+    a clean environment.
+  - Flutter/Dart: build generated bridge output plus a hand-written Dart facade
+    and run analyzer/import plus iOS simulator native smoke where applicable.
+  - Go: build the native Go package over the C ABI and run import, ownership,
+    and descriptor/session smoke tests.
+- Regression safeguards: fixture descriptors, server-key authorization
+  fixtures, fallback/failure snapshots, generated-binding API checks, and
+  package artifact checksums.
+- Definition of Done:
+    - [ ] Phase 0 foundation tasks are closed or explicitly refreshed.
+    - [ ] Rust library can run the end-to-end local secure tunnel scenario.
+    - [ ] Swift, Kotlin, and Python bindings are generated from the same pinned
+          facade.
+    - [ ] Swift/iOS is the first production-grade SDK package target.
+    - [ ] Flutter/Dart and Go package tasks exist and share the same Rust SDK
+          facade semantics.
+    - [ ] Native packages build in CI and pass import/session smoke tests.
+    - [ ] No unresolved high/medium independent review findings remain.
+
+## Risks and Mitigations
+
+| Risk | Trigger | Mitigation | Owner |
+|---|---|---|---|
+| UniFFI pre-1.0 churn breaks generated SDKs | upgrading `uniffi` or bindgen | pin `uniffi` and bindgen in the workspace; regenerate in CI; keep API small | Asim Ihsan |
+| Foreign SDK leaks internal Rust design | exporting selector, Noise, or transport types directly | introduce an SDK facade and review UDL as the public contract | Asim Ihsan |
+| Packages import but cannot perform useful work | binding work starts before Rust session behavior is complete | make end-to-end Rust harness a dependency of UniFFI packaging | Asim Ihsan |
+| Kotlin JNA boundary is too slow for chatty calls | many small SDK calls across the boundary | keep hot loops in Rust; benchmark boundary calls before exposing lower-level APIs | Asim Ihsan |
+| Swift toolchain concurrency or packaging edge cases block adoption | Xcode/Swift version incompatibility | add Swift package smoke tests before making Swift the primary SDK | Asim Ihsan |
+| Python API quality regresses | replacing PyO3 abruptly with flat UniFFI output | keep PyO3 compatibility until the shared facade proves an acceptable Python package | Asim Ihsan |
+| Flutter/Dart package drifts from native SDK behavior | Dart bridge exposes a different API shape from the Rust SDK facade | keep generated bridge code behind hand-written Dart facades and shared fixture tests | Asim Ihsan |
+| Go SDK memory ownership bugs appear | manual C ABI grows without drift and cleanup checks | keep C ABI narrow, use cbindgen drift checks, and test allocation/error cleanup paths | Asim Ihsan |
+| Managed-network support weakens inner trust semantics | custom CA or proxy code is treated as security trust | keep outer TLS/proxy config separate from inner Noise trust in API, tests, and docs | Asim Ihsan |
+
+## Open Questions
+
+| Question | Needed By | Owner | Resolution |
+|---|---|---|---|
+| Which package should become the first production-grade SDK target? | before `task-00000024` starts | Asim Ihsan | `resolved: Swift/iOS first; Kotlin/Python smoke parity until facade stabilizes` |
+| Should the UniFFI contract use UDL or proc macros? | during `task-00000023` | Asim Ihsan | `recommended: UDL first for a reviewable language-neutral API spec` |
+| What cancellation semantics should the SDK expose for long-running connect/session operations? | during `task-00000018` | Asim Ihsan | `open` |
+| Does Python ultimately use UniFFI only, PyO3 only, or a PyO3 wrapper over the shared facade? | during `task-00000026` | Asim Ihsan | `open` |
+| Should Flutter/Dart use Flutter Rust Bridge or direct Dart FFI plus ffigen first? | during `task-00000028` | Asim Ihsan | `recommended: Flutter Rust Bridge first, compare direct Dart FFI only if packaging evidence pushes that way` |
+| Should Go keep Go-WASM as supported SDK scope? | during `task-00000029` | Asim Ihsan | `resolved: native Go is supported; Go-WASM should be deprecated or deleted unless a future task proves concrete need` |
+
+## Immediate Next Actions
+
+1. Start `task-00000017` to decompose oversized core modules before adding the
+   SDK facade.
+2. Start `task-00000018` to define the Rust SDK contract that UniFFI will later
+   expose.
+
+## Implementation Notes
+
+- Created from the Rust library binding research captured in the user-provided
+  attachment and the follow-up notes in completed `task-00000016`.
+- The plan intentionally treats the current manual C ABI as a bridge, not the
+  final cross-language SDK strategy.
+- The plan assumes UniFFI remains the default unless a future task measures a
+  boundary-call or platform-toolchain blocker that makes the generated SDK path
+  unsuitable.
+- `2026-06-21`: User resolved the first production SDK target as Swift/iOS.
+- `2026-06-21`: Local references were prepared under
+  `/Users/asimi/Downloads/references`: `uniffi-rs`, `application-services`,
+  `flutter_rust_bridge`, `dart-native`, `cbindgen`, and `pyo3`; the plan also
+  uses `/Users/asimi/workplace/flutter_template` as the local Flutter/Dart
+  packaging reference.
+- `2026-06-21`: Reference clone commits and intended uses are recorded in
+  `backlog/docs/2026-06-21_sdk-reference-repositories.md`.
+- `2026-06-21`: User resolved Go SDK scope as native Go only, with Go-WASM to
+  be deprecated or deleted unless a future task proves concrete need.
+- `2026-06-21`: Foundation closure tasks `00000007`, `00000008`, and
+  `00000009` completed; Phase 0 now waits on `task-00000017`.
+
+## Completion Checklist
+
+- [x] All planned tasks created under `backlog/tasks/task-<id>.md`
+- [ ] All task acceptance criteria checked
+- [ ] Validation strategy executed
+- [ ] Plan status updated to `completed`
+- [ ] Plan moved to `backlog/plans/completed/`
+
+## Changelog
+
+- `2026-06-21` `Initial draft plan created after dependency and Swift-callable C ABI preparation in task-00000016.`
+- `2026-06-21` `Review fix: native package tasks now depend on task-00000022 so observability and conformance cannot be bypassed before SDK rollout.`
+- `2026-06-21` `Locked Swift/iOS as the first production-grade SDK target and added Flutter/Dart plus Go package tasks.`
+- `2026-06-21` `Review fix: UniFFI generation now depends on conformance, and Go packaging now waits for the Swift/iOS package task.`
+- `2026-06-21` `Resolved Go-WASM scope: native Go is the supported SDK path, while Go-WASM should be deprecated or deleted.`
+- `2026-06-21` `Marked foundation docs and tasks 00000007, 00000008, and 00000009 complete; task 00000017 is the remaining Phase 0 gate.`

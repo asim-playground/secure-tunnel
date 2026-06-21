@@ -33,6 +33,7 @@ implementation work.
 - `v1-service-descriptor-and-bootstrap-config.md`
 - `v1-core-protocol-quic-and-wss-bindings.md`
 - `v1-device-enrollment-and-known-device-policy.md`
+- `v1-udp-first-deployment-and-observability.md`
 - `v1-glossary.md`
 
 ## Historical Baseline

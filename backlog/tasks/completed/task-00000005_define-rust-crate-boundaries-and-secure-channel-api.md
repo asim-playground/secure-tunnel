@@ -38,14 +38,14 @@ The research note now points toward a transport-agnostic secure-channel core wit
 - backlog/docs/v1-service-descriptor-and-bootstrap-config.md
 - backlog/docs/v1-device-enrollment-and-known-device-policy.md
 - backlog/tasks/completed/task-00000001_consider-starter-crates.md
-- backlog/tasks/task-00000007_define-transport-selection-and-fallback-policy.md
-- backlog/tasks/task-00000008_write-transport-agnostic-v1-protocol-plus-quic-and-wss-bindings.md
+- backlog/tasks/completed/task-00000007_define-transport-selection-and-fallback-policy.md
+- backlog/tasks/completed/task-00000008_write-transport-agnostic-v1-protocol-plus-quic-and-wss-bindings.md
 - backlog/tasks/completed/task-00000006_define-device-enrollment-and-known-device-policy.md
 - backlog/plans/plan-00000001_secure-channel-foundation.md
 
 ## Advisory Inputs
 
-- backlog/tasks/task-00000009_define-udp-first-deployment-and-observability-requirements.md
+- backlog/tasks/completed/task-00000009_define-udp-first-deployment-and-observability-requirements.md
 
 ## Acceptance Closure
 
