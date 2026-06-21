@@ -23,8 +23,10 @@ allow = [
   "BSL-1.0",
   "BSD-2-Clause",
   "BSD-3-Clause",
+  "ISC",
   "Zlib",
   "Unicode-3.0",
+  "CDLA-Permissive-2.0",
 ]
 
 [bans]

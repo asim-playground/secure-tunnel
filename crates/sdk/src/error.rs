@@ -30,6 +30,8 @@ pub enum SdkErrorKind {
     /// Production transport adapters introduced after this facade should map
     /// proxy setup failures to this stable class.
     OuterProxyFailure,
+    /// The outer carrier protocol negotiation failed.
+    OuterProtocolFailure,
     /// The outer `QUIC` carrier was rejected before the inner channel was ready.
     OuterQuicRejected,
     /// The outer `QUIC` carrier closed before the inner channel was ready.
@@ -115,6 +117,22 @@ impl SdkError {
                 Self::new(SdkErrorKind::FallbackExhausted, *message)
             }
             ApiError::TransportFallback(reason) => Self::from_core_fallback(*reason),
+            ApiError::OuterPathFailure(carrier) => Self::new(
+                SdkErrorKind::OuterPathFailure,
+                format!("outer `{carrier}` path failed"),
+            ),
+            ApiError::OuterTlsFailure(carrier) => Self::new(
+                SdkErrorKind::OuterTlsFailure,
+                format!("outer `{carrier}` TLS setup failed"),
+            ),
+            ApiError::OuterProxyFailure(carrier) => Self::new(
+                SdkErrorKind::OuterProxyFailure,
+                format!("outer `{carrier}` proxy setup failed"),
+            ),
+            ApiError::OuterProtocolFailure(carrier) => Self::new(
+                SdkErrorKind::OuterProtocolFailure,
+                format!("outer `{carrier}` protocol negotiation failed"),
+            ),
             ApiError::InnerNoiseFailure => Self::new(
                 SdkErrorKind::InnerNoiseFailure,
                 "inner Noise handshake failed",

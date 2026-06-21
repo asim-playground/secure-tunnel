@@ -232,7 +232,7 @@ Rust facade and behavior.
     - [ ] a Rust caller can create a client, load a descriptor/config, connect,
           reach `Secure Ready`, authenticate, exchange application records, and
           close cleanly.
-    - [ ] both `QUIC` success and `WSS` fallback run through production
+    - [x] both `QUIC` success and `WSS` fallback run through production
           adapters, not only test-only prototype transports.
     - [ ] local end-to-end tests cover success, fallback, inner trust failure,
           and graceful close.
@@ -320,7 +320,7 @@ Rust facade and behavior.
 | task-`00000009` | `define udp-first deployment and observability requirements` | `Phase 0` | `task-00000007, task-00000008` | `completed` |
 | task-`00000017` | `decompose core modules before sdk expansion` | `Phase 0` | `task-00000016` | `completed` |
 | task-`00000018` | `define product sdk facade and session contract` | `Phase 1` | `task-00000007, task-00000008, task-00000009, task-00000017` | `completed` |
-| task-`00000019` | `implement production quic and wss carrier adapters` | `Phase 1` | `task-00000012, task-00000018` | `proposed` |
+| task-`00000019` | `implement production quic and wss carrier adapters` | `Phase 1` | `task-00000012, task-00000018` | `completed` |
 | task-`00000020` | `implement account and device session protocol` | `Phase 1` | `task-00000006, task-00000011, task-00000018` | `proposed` |
 | task-`00000021` | `build end-to-end tunnel harness and cli smoke path` | `Phase 1` | `task-00000019, task-00000020` | `proposed` |
 | task-`00000013` | `allow optional custom ca cert for intercepted wss or quic` | `Phase 2` | `task-00000009, task-00000012, task-00000019` | `proposed` |
@@ -393,8 +393,8 @@ Rust facade and behavior.
 
 ## Immediate Next Actions
 
-1. Start `task-00000019` to wire production `QUIC` and `WSS` carrier adapters
-   behind the SDK facade's private transport ports.
+1. Start `task-00000020` to implement the account and known-device session
+   protocol on top of the production transport adapters.
 
 ## Implementation Notes
 
@@ -423,6 +423,11 @@ Rust facade and behavior.
 - `2026-06-21`: `task-00000018` completed the product SDK facade crate and
   session contract. Phase 1 now moves to production `QUIC`/`WSS` adapters in
   `task-00000019`.
+- `2026-06-21`: `task-00000019` completed production `QUIC` and `WSS`
+  adapters in `secure-tunnel-transport`, wired them into the SDK default
+  client, and added real secure-ready integration coverage for success,
+  fallback, close-before-secure-ready, malformed target, oversized WSS message,
+  and inner-trust failure paths.
 
 ## Completion Checklist
 
@@ -442,3 +447,4 @@ Rust facade and behavior.
 - `2026-06-21` `Marked foundation docs and tasks 00000007, 00000008, and 00000009 complete; task 00000017 is the remaining Phase 0 gate.`
 - `2026-06-21` `Completed task 00000017 and advanced the plan to Phase 1.`
 - `2026-06-21` `Completed task 00000018 with a new secure-tunnel-sdk facade crate, connect/session contract, cancellation semantics, and mock-backed SDK tests.`
+- `2026-06-21` `Completed task 00000019 with production QUIC/WSS transport adapters, SDK default-port wiring, Rustls/Tungstenite supply-chain policy updates, and integration tests for secure-ready success/fallback/failure semantics.`

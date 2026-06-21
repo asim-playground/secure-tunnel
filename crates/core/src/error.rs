@@ -35,6 +35,18 @@ pub enum ApiError {
     /// The outer carrier failed in a way that still permits fallback.
     #[error("transport attempt may fall back after `{0}`")]
     TransportFallback(FallbackReason),
+    /// The outer network path failed without another policy-allowed candidate.
+    #[error("outer `{0}` path failed")]
+    OuterPathFailure(CarrierKind),
+    /// The outer TLS setup failed without another policy-allowed candidate.
+    #[error("outer `{0}` TLS setup failed")]
+    OuterTlsFailure(CarrierKind),
+    /// The outer proxy setup failed without another policy-allowed candidate.
+    #[error("outer `{0}` proxy setup failed")]
+    OuterProxyFailure(CarrierKind),
+    /// The outer carrier protocol negotiation failed.
+    #[error("outer `{0}` protocol negotiation failed")]
+    OuterProtocolFailure(CarrierKind),
     /// Secure-channel processing failed during the inner Noise handshake.
     #[error("secure-ready failed during the inner Noise handshake")]
     InnerNoiseFailure,

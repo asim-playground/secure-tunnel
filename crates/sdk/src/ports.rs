@@ -5,8 +5,6 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-use std::future::ready;
-
 pub(super) trait TransportPorts: Send + Sync {
     fn quic(&self) -> Option<&dyn secure_tunnel_core::CarrierConnector>;
     fn wss(&self) -> Option<&dyn secure_tunnel_core::CarrierConnector>;
@@ -14,41 +12,20 @@ pub(super) trait TransportPorts: Send + Sync {
 }
 
 #[derive(Default)]
-pub(super) struct UnavailableTransportPorts {
-    secure_ready: UnavailableSecureReady,
+pub(super) struct ProductionTransportPorts {
+    inner: secure_tunnel_transport::ProductionTransportPorts,
 }
 
-impl TransportPorts for UnavailableTransportPorts {
+impl TransportPorts for ProductionTransportPorts {
     fn quic(&self) -> Option<&dyn secure_tunnel_core::CarrierConnector> {
-        None
+        Some(self.inner.quic())
     }
 
     fn wss(&self) -> Option<&dyn secure_tunnel_core::CarrierConnector> {
-        None
+        Some(self.inner.wss())
     }
 
     fn secure_ready(&self) -> &dyn secure_tunnel_core::SecureReadyEvaluator {
-        &self.secure_ready
-    }
-}
-
-#[derive(Default)]
-struct UnavailableSecureReady;
-
-impl secure_tunnel_core::SecureReadyEvaluator for UnavailableSecureReady {
-    fn reach_secure_ready(
-        &self,
-        _descriptor: &secure_tunnel_core::ServiceDescriptor,
-        _now_unix_seconds: u64,
-        _transport: Box<dyn secure_tunnel_core::FramedDuplex>,
-    ) -> secure_tunnel_core::BoxFuture<
-        '_,
-        secure_tunnel_core::ApiResult<secure_tunnel_core::SecureReadyTransport>,
-    > {
-        Box::pin(ready(Err(
-            secure_tunnel_core::ApiError::TransportSelectorInvariant(
-                "secure-ready evaluator is not configured",
-            ),
-        )))
+        self.inner.secure_ready()
     }
 }

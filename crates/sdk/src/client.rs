@@ -13,7 +13,7 @@ use crate::cancellation::CancellationHandle;
 use crate::descriptor::{BootstrapDescriptor, TransportPolicyConfig};
 use crate::error::{ConnectError, ConnectResult, SdkError};
 use crate::planning::connect_plan_report;
-use crate::ports::{TransportPorts, UnavailableTransportPorts};
+use crate::ports::{ProductionTransportPorts, TransportPorts};
 use crate::reports::{
     ConnectReport, SecureChannelArtifacts, TransportAttemptReport, TransportCacheSnapshot,
 };
@@ -97,14 +97,15 @@ impl SecureTunnelClient {
     pub fn new(config: ClientConfig) -> Self {
         Self {
             config,
-            ports: Arc::new(UnavailableTransportPorts::default()),
+            ports: Arc::new(ProductionTransportPorts::default()),
         }
     }
 
     /// Connects to the service described by the supplied descriptor.
     ///
-    /// The method is async, but runtime-neutral. Callers choose the executor
-    /// that drives the returned future.
+    /// The default client uses production transport adapters backed by Tokio
+    /// DNS, socket, `QUIC`, and WebSocket I/O. Callers must drive this future
+    /// inside a Tokio runtime.
     ///
     /// # Errors
     ///
