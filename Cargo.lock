@@ -1352,6 +1352,9 @@ name = "secure-tunnel-cli"
 version = "0.1.0"
 dependencies = [
  "secure-tunnel-core",
+ "secure-tunnel-harness",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -1383,6 +1386,27 @@ dependencies = [
  "secure-tunnel-core",
  "serde_json",
  "talc",
+]
+
+[[package]]
+name = "secure-tunnel-harness"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "ed25519-dalek",
+ "futures-util",
+ "quinn",
+ "rcgen",
+ "rustls",
+ "secure-tunnel-core",
+ "secure-tunnel-sdk",
+ "serde",
+ "serde_json",
+ "snow",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-rustls",
+ "tokio-tungstenite",
 ]
 
 [[package]]

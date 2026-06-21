@@ -24,6 +24,8 @@ use crate::session::SecureTunnelSession;
 pub struct ClientConfig {
     /// Transport selection policy.
     pub transport_policy: TransportPolicyConfig,
+    /// Optional DER-encoded outer TLS roots for local or managed deployments.
+    pub outer_root_certificates_der: Option<Vec<Vec<u8>>>,
     /// Pinned descriptor roots that may authorize service descriptors.
     pub descriptor_trust_anchors: Vec<secure_tunnel_core::TrustAnchor>,
     /// Pinned service static public keys accepted for the inner `NK1` channel.
@@ -50,12 +52,20 @@ impl ClientConfig {
         self.pinned_service_static_public_keys = keys;
         self
     }
+
+    /// Sets DER-encoded outer TLS roots for local or managed-network use.
+    #[must_use]
+    pub fn with_outer_root_certificates_der(mut self, certificates: Vec<Vec<u8>>) -> Self {
+        self.outer_root_certificates_der = Some(certificates);
+        self
+    }
 }
 
 impl Default for ClientConfig {
     fn default() -> Self {
         Self {
             transport_policy: TransportPolicyConfig::default(),
+            outer_root_certificates_der: None,
             descriptor_trust_anchors: secure_tunnel_core::example_descriptor_trust_anchors(),
             pinned_service_static_public_keys: vec![
                 secure_tunnel_core::obfuscated_service_static_public_key(),

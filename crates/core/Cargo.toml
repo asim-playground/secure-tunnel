@@ -23,6 +23,12 @@ sha2 = "0.10"
 snow = { version = "0.10", default-features = false, features = ["default-resolver", "default-resolver-crypto"] }
 thiserror = "2.0"
 
+[features]
+default = []
+# Enables helpers for local fixtures and smoke harnesses that must mutate and
+# re-sign example descriptors. Production consumers should leave this disabled.
+test-support = []
+
 [dev-dependencies]
 futures = "0.3"
 

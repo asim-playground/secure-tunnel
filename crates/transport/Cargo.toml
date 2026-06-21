@@ -28,6 +28,7 @@ url = "2"
 base64 = "0.22"
 ed25519-dalek = "2"
 rcgen = "0.14"
+secure-tunnel-core = { path = "../core", version = "0.1.0", features = ["test-support"] }
 snow = { version = "0.10", default-features = false, features = ["default-resolver", "default-resolver-crypto"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }

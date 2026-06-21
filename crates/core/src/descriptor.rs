@@ -123,14 +123,14 @@ impl ServiceDescriptor {
 
     /// Re-signs a descriptor with the built-in example root for local tests.
     ///
-    /// This helper exists so integration fixtures can mutate local ports and
-    /// generated service static keys while still exercising descriptor
-    /// signature verification. It is not compiled into release builds.
+    /// This helper exists so integration fixtures and local smoke harnesses can
+    /// mutate local ports and generated service static keys while still
+    /// exercising descriptor signature verification.
     ///
     /// # Errors
     ///
     /// Returns an error when canonical descriptor bytes cannot be built.
-    #[cfg(debug_assertions)]
+    #[cfg(any(test, feature = "test-support"))]
     #[doc(hidden)]
     pub fn resign_with_example_key_for_testing(&mut self) -> ApiResult<()> {
         *self = crate::descriptor_auth::sign_example_descriptor(self.clone())?;

@@ -16,6 +16,12 @@ categories = ["command-line-utilities"]
 
 [dependencies]
 secure-tunnel-core = { path = "../core" }
+secure-tunnel-harness = { path = "../harness" }
+serde_json = "1.0"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[dev-dependencies]
+serde_json = "1.0"
 
 [[bin]]
 name = "secure-tunnel-cli"

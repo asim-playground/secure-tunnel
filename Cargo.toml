@@ -4,6 +4,7 @@ members = [
     "crates/core",
     "crates/go",
     "crates/go-wasm",
+    "crates/harness",
     "crates/python",
     "crates/sdk",
     "crates/transport",

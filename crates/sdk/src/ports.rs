@@ -17,7 +17,17 @@ pub(super) struct ProductionTransportPorts {
 
 impl ProductionTransportPorts {
     pub(super) fn new(config: &crate::ClientConfig) -> Self {
-        let transport_config = secure_tunnel_transport::TransportClientConfig::platform_verifier()
+        let transport_config = config
+            .outer_root_certificates_der
+            .as_ref()
+            .map_or_else(
+                secure_tunnel_transport::TransportClientConfig::platform_verifier,
+                |certificates| {
+                    secure_tunnel_transport::TransportClientConfig::with_root_certificate_der(
+                        certificates.clone(),
+                    )
+                },
+            )
             .with_descriptor_trust_anchors(config.descriptor_trust_anchors.clone())
             .with_pinned_service_static_public_keys(
                 config.pinned_service_static_public_keys.clone(),

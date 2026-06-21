@@ -72,7 +72,7 @@ or degraded networks.
 - backlog/tasks/completed/task-00000009_define-udp-first-deployment-and-observability-requirements.md
 - backlog/tasks/task-00000013_allow-optional-custom-ca-cert-for-intercepted-wss-or-quic.md
 - backlog/tasks/task-00000014_allow-optional-http-proxy-for-wss-client.md
-- backlog/tasks/task-00000021_build-end-to-end-tunnel-harness-and-cli-smoke-path.md
+- backlog/tasks/completed/task-00000021_build-end-to-end-tunnel-harness-and-cli-smoke-path.md
 - backlog/plans/plan-00000002_product-secure-tunnel-sdk-and-bindings.md
 
 ## Reference Tasks

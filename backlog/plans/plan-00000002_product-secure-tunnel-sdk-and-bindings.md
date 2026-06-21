@@ -144,11 +144,13 @@ Rust facade and behavior.
 
 ### Production transport and session behavior
 
-- Missing: production end-to-end server/harness wiring, outer TLS custom-CA
-  configuration, HTTP proxy support, retry policy hardening, and graceful close
-  behavior above current SDK/transport coverage.
-- Impact: Swift/Kotlin/Python packages would be importable but not yet useful
-  for a real client.
+- Status: task `00000021` adds local end-to-end harness and CLI smoke coverage
+  for descriptor loading, production `QUIC`/`WSS` adapters, `Secure Ready`,
+  account/device auth, application exchange, and close.
+- Missing: outer TLS custom-CA configuration product UX, HTTP proxy support,
+  retry policy hardening, and broader conformance/observability coverage.
+- Impact: Swift/Kotlin/Python packages can reuse a local Rust smoke oracle, but
+  native package import tests still need generated bindings and artifacts.
 - Notes: managed-network tasks `00000013` and `00000014` should land after the
   first real adapters exist so their tests exercise actual carrier code.
 
@@ -331,7 +333,7 @@ Rust facade and behavior.
 | task-`00000018` | `define product sdk facade and session contract` | `Phase 1` | `task-00000007, task-00000008, task-00000009, task-00000017` | `completed` |
 | task-`00000019` | `implement production quic and wss carrier adapters` | `Phase 1` | `task-00000012, task-00000018` | `completed` |
 | task-`00000020` | `implement account and device session protocol` | `Phase 1` | `task-00000006, task-00000011, task-00000018` | `completed` |
-| task-`00000021` | `build end-to-end tunnel harness and cli smoke path` | `Phase 1` | `task-00000019, task-00000020` | `proposed` |
+| task-`00000021` | `build end-to-end tunnel harness and cli smoke path` | `Phase 1` | `task-00000019, task-00000020` | `completed` |
 | task-`00000013` | `allow optional custom ca cert for intercepted wss or quic` | `Phase 2` | `task-00000009, task-00000012, task-00000019` | `proposed` |
 | task-`00000014` | `allow optional http proxy for wss client` | `Phase 2` | `task-00000009, task-00000012, task-00000013, task-00000019` | `proposed` |
 | task-`00000022` | `add observability and conformance test matrix` | `Phase 2` | `task-00000009, task-00000013, task-00000014, task-00000021` | `proposed` |
@@ -402,9 +404,8 @@ Rust facade and behavior.
 
 ## Immediate Next Actions
 
-1. Start `task-00000021` to build the end-to-end tunnel harness and CLI smoke
-   path on top of the production transport adapters and account/device session
-   protocol.
+1. Start `task-00000022` to add the observability and conformance matrix over
+   the now-available end-to-end harness.
 
 ## Implementation Notes
 
@@ -444,6 +445,9 @@ Rust facade and behavior.
   build-time obfuscation for the embedded service static public-key pin. The
   SDK now performs descriptor root/signature/freshness and service static pin
   authorization before planning or dialing descriptor-controlled endpoints.
+- `2026-06-21`: `task-00000021` completed the local end-to-end harness and CLI
+  smoke path over production SDK and transport adapters, with JSON smoke output
+  and a dedicated `mise run smoke` task included in `mise run ci`.
 
 ## Completion Checklist
 
@@ -465,3 +469,4 @@ Rust facade and behavior.
 - `2026-06-21` `Completed task 00000018 with a new secure-tunnel-sdk facade crate, connect/session contract, cancellation semantics, and mock-backed SDK tests.`
 - `2026-06-21` `Completed task 00000019 with production QUIC/WSS transport adapters, SDK default-port wiring, Rustls/Tungstenite supply-chain policy updates, and integration tests for secure-ready success/fallback/failure semantics.`
 - `2026-06-21` `Completed task 00000020 with NK1 service-static trust, signed descriptor authorization, build-time public-key pin obfuscation, account/device session protocol methods, and no-dial regressions for unauthorized descriptors and service keys.`
+- `2026-06-21` `Completed task 00000021 with secure-tunnel-harness, JSON-first CLI smoke scenarios for QUIC success and WSS fallback, SDK local TLS root config, and mise smoke automation in the CI task.`

@@ -1,0 +1,38 @@
+[package]
+name = "secure-tunnel-harness"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+description = "Local end-to-end smoke harness for Secure Tunnel"
+homepage = "https://github.com/asim-playground/secure-tunnel"
+repository = "https://github.com/asim-playground/secure-tunnel"
+documentation = "https://docs.rs/secure-tunnel-harness"
+readme = "../../README.md"
+keywords = ["secure-tunnel", "harness", "smoke"]
+categories = ["development-tools", "network-programming"]
+
+[dependencies]
+base64 = "0.22"
+ed25519-dalek = "2"
+futures-util = "0.3"
+quinn = "0.11"
+rcgen = "0.14"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+secure-tunnel-core = { path = "../core", version = "0.1.0", features = ["test-support"] }
+secure-tunnel-sdk = { path = "../sdk", version = "0.1.0" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+snow = { version = "0.10", default-features = false, features = ["default-resolver", "default-resolver-crypto"] }
+thiserror = "2.0"
+tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+tokio-tungstenite = { version = "0.29", features = ["rustls-tls-native-roots"] }
+
+[lib]
+path = "src/lib.rs"
+
+[lints]
+workspace = true

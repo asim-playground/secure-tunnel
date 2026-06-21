@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+#MISE description="Run local end-to-end tunnel smoke scenarios"
+set -euo pipefail
+
+json="$(cargo run -p secure-tunnel-cli -- smoke --scenario all --format json)"
+printf '%s\n' "${json}" | jq -e '.ok == true and (.scenarios | length == 2)' >/dev/null
+for forbidden in \
+  acct-smoke \
+  local-smoke-credential \
+  session-smoke \
+  device-ed25519-smoke \
+  smoke-ping \
+  smoke-pong \
+  account_id \
+  credential_payload \
+  canonical_bytes \
+  session_context_hash \
+  session_id \
+  signature \
+  service_static_public_key
+do
+  if grep -Fq "${forbidden}" <<<"${json}"; then
+    printf 'smoke JSON leaked forbidden fixture value or field: %s\n' "${forbidden}" >&2
+    exit 1
+  fi
+done
+printf '%s\n' "${json}"
