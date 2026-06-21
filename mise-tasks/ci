@@ -6,5 +6,6 @@ mise run build-all
 mise run lint-all
 mise run test-all
 mise run smoke
+mise run conformance
 mise run rust:coverage-ci
 mise run deps-check

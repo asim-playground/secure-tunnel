@@ -10,7 +10,10 @@
 use std::fmt;
 use std::str::FromStr;
 
-use secure_tunnel_harness::{SmokeScenario, run_smoke_scenarios};
+use secure_tunnel_harness::{
+    ConformanceScenario, ConformanceSuiteReport, SmokeScenario, run_conformance_scenario,
+    run_conformance_suite, run_smoke_scenarios,
+};
 
 #[tokio::main]
 async fn main() {
@@ -27,6 +30,7 @@ async fn run(args: Vec<String>) -> Result<(), CliError> {
             Ok(())
         }
         Some("smoke") => run_smoke_command(&args[1..]).await,
+        Some("conformance") => run_conformance_command(&args[1..]).await,
         Some("-h" | "--help") => {
             print_usage();
             Ok(())
@@ -40,6 +44,24 @@ async fn run_smoke_command(args: &[String]) -> Result<(), CliError> {
         return Ok(());
     };
     let report = run_smoke_scenarios(&options.scenarios).await?;
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    Ok(())
+}
+
+async fn run_conformance_command(args: &[String]) -> Result<(), CliError> {
+    let Some(options) = ConformanceOptions::parse(args)? else {
+        return Ok(());
+    };
+    let report = if let Some(scenario) = options.scenario {
+        let report = run_conformance_scenario(scenario).await?;
+        ConformanceSuiteReport {
+            ok: report.ok,
+            scenarios: vec![report],
+            pending: Vec::new(),
+        }
+    } else {
+        run_conformance_suite().await?
+    };
     println!("{}", serde_json::to_string_pretty(&report)?);
     Ok(())
 }
@@ -61,6 +83,7 @@ fn print_usage() {
     println!(
         "  secure-tunnel-cli smoke [--scenario all|quic-success|wss-fallback] [--format json]"
     );
+    println!("  secure-tunnel-cli conformance [--scenario all|<name>] [--format json]");
 }
 
 struct SmokeOptions {
@@ -108,6 +131,51 @@ impl SmokeOptions {
     }
 }
 
+struct ConformanceOptions {
+    scenario: Option<ConformanceScenario>,
+}
+
+impl ConformanceOptions {
+    fn parse(args: &[String]) -> Result<Option<Self>, CliError> {
+        let mut scenario = "all".to_owned();
+        let mut format = "json".to_owned();
+        let mut index = 0_usize;
+        while index < args.len() {
+            match args[index].as_str() {
+                "-h" | "--help" => {
+                    print_usage();
+                    return Ok(None);
+                }
+                "--scenario" => {
+                    index += 1;
+                    scenario.clone_from(
+                        args.get(index)
+                            .ok_or(CliError::usage("--scenario requires a value"))?,
+                    );
+                }
+                "--format" => {
+                    index += 1;
+                    format.clone_from(
+                        args.get(index)
+                            .ok_or(CliError::usage("--format requires a value"))?,
+                    );
+                }
+                _ => return Err(CliError::usage("unknown conformance option")),
+            }
+            index += 1;
+        }
+        if format != "json" {
+            return Err(CliError::usage("only --format json is supported"));
+        }
+        let scenario = if scenario == "all" {
+            None
+        } else {
+            Some(ConformanceScenario::from_str(&scenario)?)
+        };
+        Ok(Some(Self { scenario }))
+    }
+}
+
 #[derive(Debug)]
 enum CliError {
     Usage(&'static str),
@@ -144,7 +212,7 @@ impl fmt::Display for CliError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Usage(message) => write!(formatter, "{message}"),
-            Self::Harness(error) => write!(formatter, "smoke failed: {error}"),
+            Self::Harness(error) => write!(formatter, "harness failed: {error}"),
             Self::Json(error) => write!(formatter, "json failed: {error}"),
         }
     }

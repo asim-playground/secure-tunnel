@@ -11,6 +11,7 @@ use super::{
     DeviceSessionContext, PendingDeviceChallenge,
 };
 use crate::error::{SdkError, SdkResult};
+use crate::observability::{AuthStage, FailureClass, TelemetryOutcome, event_names};
 use crate::session::{SecureTunnelSession, SessionState};
 
 impl SecureTunnelSession {
@@ -40,6 +41,7 @@ impl SecureTunnelSession {
         match result {
             Ok(account) => {
                 let report = account.report();
+                trace_auth_success(AuthStage::Account);
                 lease.restore_with_auth_state(
                     SessionState::AccountAuthenticated,
                     Some(account),
@@ -49,6 +51,7 @@ impl SecureTunnelSession {
                 Ok(report)
             }
             Err(error) => {
+                trace_auth_failure(AuthStage::Account, error.kind());
                 lease.restore()?;
                 Err(error)
             }
@@ -107,6 +110,7 @@ impl SecureTunnelSession {
                 })
             }
             Err(error) => {
+                trace_auth_failure(AuthStage::Device, error.kind());
                 lease.restore()?;
                 Err(error)
             }
@@ -125,19 +129,23 @@ impl SecureTunnelSession {
         signature: Vec<u8>,
         now_unix_ms: u64,
     ) -> SdkResult<DeviceAuthReport> {
-        let pending = self.take_matching_pending(
-            &challenge.device_key_id,
-            &challenge.server_challenge,
-            challenge.expires_at_unix_ms,
-            secure_tunnel_core::DeviceProofPurpose::KnownDeviceReauth,
-            now_unix_ms,
+        let pending = trace_auth_preflight(
+            AuthStage::Device,
+            self.take_matching_pending(
+                &challenge.device_key_id,
+                &challenge.server_challenge,
+                challenge.expires_at_unix_ms,
+                secure_tunnel_core::DeviceProofPurpose::KnownDeviceReauth,
+                now_unix_ms,
+            ),
         )?;
         let expected_device_key_id = pending.device_key_id.clone();
+        let signature = trace_auth_preflight(AuthStage::Device, signature_64(signature))?;
         let finish = secure_tunnel_core::DeviceProofFinish {
             device_key_id: pending.device_key_id,
             server_challenge: pending.server_challenge,
             expires_at_unix_ms: pending.expires_at_unix_ms,
-            signature: signature_64(signature)?,
+            signature,
             candidate_device_public_key: None,
         };
         let mut lease = self.lease_transport(None)?;
@@ -151,6 +159,7 @@ impl SecureTunnelSession {
         match result {
             Ok(device) => {
                 let report = device.auth_report();
+                trace_auth_success(AuthStage::Device);
                 let account = self.current_account()?;
                 lease.restore_with_auth_state(
                     SessionState::KnownDeviceAuthenticated,
@@ -161,6 +170,7 @@ impl SecureTunnelSession {
                 Ok(report)
             }
             Err(error) => {
+                trace_auth_failure(AuthStage::Device, error.kind());
                 lease.restore()?;
                 Err(error)
             }
@@ -224,6 +234,7 @@ impl SecureTunnelSession {
                 })
             }
             Err(error) => {
+                trace_auth_failure(AuthStage::DeviceEnrollment, error.kind());
                 lease.restore()?;
                 Err(error)
             }
@@ -242,19 +253,23 @@ impl SecureTunnelSession {
         signature: Vec<u8>,
         now_unix_ms: u64,
     ) -> SdkResult<DeviceEnrollmentReport> {
-        let pending = self.take_matching_pending(
-            &challenge.device_key_id,
-            &challenge.server_challenge,
-            challenge.expires_at_unix_ms,
-            secure_tunnel_core::DeviceProofPurpose::NewDeviceEnrollment,
-            now_unix_ms,
+        let pending = trace_auth_preflight(
+            AuthStage::DeviceEnrollment,
+            self.take_matching_pending(
+                &challenge.device_key_id,
+                &challenge.server_challenge,
+                challenge.expires_at_unix_ms,
+                secure_tunnel_core::DeviceProofPurpose::NewDeviceEnrollment,
+                now_unix_ms,
+            ),
         )?;
         let expected_device_key_id = pending.device_key_id.clone();
+        let signature = trace_auth_preflight(AuthStage::DeviceEnrollment, signature_64(signature))?;
         let finish = secure_tunnel_core::DeviceProofFinish {
             device_key_id: pending.device_key_id,
             server_challenge: pending.server_challenge,
             expires_at_unix_ms: pending.expires_at_unix_ms,
-            signature: signature_64(signature)?,
+            signature,
             candidate_device_public_key: pending.candidate_device_public_key,
         };
         let mut lease = self.lease_transport(None)?;
@@ -268,6 +283,7 @@ impl SecureTunnelSession {
         match result {
             Ok(device) => {
                 let report = device.enrollment_report();
+                trace_auth_success(AuthStage::DeviceEnrollment);
                 let account = self.current_account()?;
                 lease.restore_with_auth_state(
                     SessionState::KnownDeviceAuthenticated,
@@ -278,6 +294,7 @@ impl SecureTunnelSession {
                 Ok(report)
             }
             Err(error) => {
+                trace_auth_failure(AuthStage::DeviceEnrollment, error.kind());
                 lease.restore()?;
                 Err(error)
             }
@@ -355,6 +372,41 @@ impl SecureTunnelSession {
         }
         Ok(pending)
     }
+}
+
+fn trace_auth_preflight<T>(stage: AuthStage, result: SdkResult<T>) -> SdkResult<T> {
+    match result {
+        Ok(value) => Ok(value),
+        Err(error) => {
+            trace_auth_failure(stage, error.kind());
+            Err(error)
+        }
+    }
+}
+
+fn trace_auth_success(stage: AuthStage) {
+    let event_name = match stage {
+        AuthStage::Account => event_names::AUTH_ACCOUNT,
+        AuthStage::Device | AuthStage::DeviceEnrollment => event_names::AUTH_DEVICE,
+    };
+    tracing::info!(
+        event_name,
+        outcome = ?TelemetryOutcome::Success,
+        auth_stage = ?stage,
+    );
+}
+
+fn trace_auth_failure(stage: AuthStage, kind: crate::SdkErrorKind) {
+    let event_name = match stage {
+        AuthStage::Account => event_names::AUTH_ACCOUNT,
+        AuthStage::Device | AuthStage::DeviceEnrollment => event_names::AUTH_DEVICE,
+    };
+    tracing::warn!(
+        event_name,
+        outcome = ?TelemetryOutcome::Failure,
+        auth_stage = ?stage,
+        failure_class = ?FailureClass::from(kind),
+    );
 }
 
 struct ProofBase {

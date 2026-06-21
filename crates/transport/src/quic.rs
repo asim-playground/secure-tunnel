@@ -45,6 +45,11 @@ impl CarrierConnector for QuicConnector {
                     "QUIC connector received a non-QUIC target",
                 ));
             };
+            tracing::debug!(
+                event_name = "transport.adapter_connect",
+                carrier = "quic",
+                phase = "connect_start"
+            );
 
             let remote = resolve_quic_addr(&target.connect_host, target.port).await?;
             let mut endpoint =
@@ -63,6 +68,11 @@ impl CarrierConnector for QuicConnector {
                 .open_bi()
                 .await
                 .map_err(|_| ApiError::TransportFallback(FallbackReason::OuterQuicClosedEarly))?;
+            tracing::debug!(
+                event_name = "transport.adapter_connect",
+                carrier = "quic",
+                phase = "connect_ready"
+            );
 
             Ok(Box::new(QuicFramedDuplex {
                 endpoint,

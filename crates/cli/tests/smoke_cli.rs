@@ -49,6 +49,32 @@ fn cli_smoke_help_succeeds() {
     );
 }
 
+#[test]
+fn cli_conformance_outputs_sanitized_json() {
+    let output = Command::new(env!("CARGO_BIN_EXE_secure-tunnel-cli"))
+        .args([
+            "conformance",
+            "--scenario",
+            "stale-device-challenge",
+            "--format",
+            "json",
+        ])
+        .output()
+        .expect("CLI conformance command should start");
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let value: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("stdout should be JSON");
+    assert_eq!(value["ok"], true);
+    assert_eq!(value["scenarios"][0]["scenario"], "stale_device_challenge");
+    assert_eq!(value["scenarios"][0]["terminal_error_kind"], "auth_failure");
+    assert_sanitized_stdout(&String::from_utf8_lossy(&output.stdout));
+}
+
 fn assert_sanitized_stdout(stdout: &str) {
     for forbidden in [
         "acct-smoke",
@@ -64,6 +90,11 @@ fn assert_sanitized_stdout(stdout: &str) {
         "session_id",
         "signature",
         "service_static_public_key",
+        "account_context_hash",
+        "server_challenge",
+        "device_public_key",
+        "handshake_hash",
+        "channel_binding",
     ] {
         assert!(
             !stdout.contains(forbidden),

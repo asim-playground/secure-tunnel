@@ -11,11 +11,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::cancellation::CancellationHandle;
 use crate::descriptor::{BootstrapDescriptor, TransportPolicyConfig};
-use crate::error::{ConnectError, ConnectResult, SdkError};
+use crate::error::{ConnectError, ConnectResult, SdkError, SdkErrorKind};
+use crate::observability::{FailureClass, TelemetryOutcome, event_names};
 use crate::planning::connect_plan_report;
 use crate::ports::{ProductionTransportPorts, TransportPorts};
 use crate::reports::{
-    ConnectReport, SecureChannelArtifacts, TransportAttemptReport, TransportCacheSnapshot,
+    ConnectReport, SecureChannelArtifacts, TransportAttemptOutcome, TransportAttemptReport,
+    TransportCacheSnapshot,
 };
 use crate::session::SecureTunnelSession;
 
@@ -161,17 +163,33 @@ impl SecureTunnelClient {
     /// transport selection starts, the error includes the attempt trace.
     pub async fn connect(&self, options: ConnectOptions) -> ConnectResult<ConnectOutcome> {
         Self::check_cancelled(options.cancellation.as_ref())?;
-        self.authorize_descriptor_for_network(&options.descriptor, options.now_unix_seconds)?;
+        let service_id = options.descriptor.service_id();
+        let environment_id = options.descriptor.environment_id();
+        if let Err(error) =
+            self.authorize_descriptor_for_network(&options.descriptor, options.now_unix_seconds)
+        {
+            trace_descriptor_validation(&service_id, &environment_id, error.kind());
+            return Err(error);
+        }
+        tracing::info!(
+            event_name = event_names::DESCRIPTOR_VALIDATION,
+            outcome = ?TelemetryOutcome::Success,
+            service_id = %service_id,
+            environment_id = %environment_id,
+        );
         let core_cache = options
             .transport_cache
             .as_ref()
             .map(TransportCacheSnapshot::to_core);
-        let _plan = connect_plan_report(
+        if let Err(error) = connect_plan_report(
             &options.descriptor,
             options.transport_cache.as_ref(),
             options.now_unix_seconds,
-        )
-        .map_err(ConnectError::without_attempts)?;
+        ) {
+            let error = ConnectError::without_attempts(error);
+            trace_descriptor_validation(&service_id, &environment_id, error.kind());
+            return Err(error);
+        }
         Self::check_cancelled(options.cancellation.as_ref())?;
 
         let selected = secure_tunnel_core::TransportSelector::new(
@@ -186,12 +204,15 @@ impl SecureTunnelClient {
         )
         .await
         .map_err(|error| {
-            let attempts = error
+            let attempts: Vec<TransportAttemptReport> = error
                 .attempts
                 .iter()
                 .map(TransportAttemptReport::from_core)
                 .collect();
-            ConnectError::with_attempts(SdkError::from_core(&error.cause), attempts)
+            let error = SdkError::from_core(&error.cause);
+            trace_attempts(&attempts);
+            trace_terminal_failure(error.kind());
+            ConnectError::with_attempts(error, attempts)
         })?;
 
         if options
@@ -199,14 +220,24 @@ impl SecureTunnelClient {
             .as_ref()
             .is_some_and(CancellationHandle::is_cancelled)
         {
-            let attempts = selected
+            let attempts: Vec<TransportAttemptReport> = selected
                 .attempts
                 .iter()
                 .map(TransportAttemptReport::from_core)
                 .collect();
+            trace_attempts(&attempts);
+            trace_terminal_failure(SdkErrorKind::Cancelled);
             return Err(ConnectError::with_attempts(SdkError::cancelled(), attempts));
         }
         let report = ConnectReport::from_selected(&selected);
+        trace_attempts(&report.attempts);
+        tracing::info!(
+            event_name = event_names::TRANSPORT_SECURE_READY,
+            outcome = ?TelemetryOutcome::SecureReady,
+            carrier = ?report.selected_carrier,
+            cache_state = ?report.cache_state,
+            fallback_reason = ?report.fallback_reason,
+        );
         let artifacts = SecureChannelArtifacts::from_core(&selected.artifacts);
         let session = SecureTunnelSession::from_selected(selected, options.descriptor);
         Ok(ConnectOutcome {
@@ -253,5 +284,65 @@ impl SecureTunnelClient {
             }
             _ => Ok(()),
         }
+    }
+}
+
+fn trace_descriptor_validation(service_id: &str, environment_id: &str, kind: SdkErrorKind) {
+    tracing::warn!(
+        event_name = event_names::DESCRIPTOR_VALIDATION,
+        outcome = ?TelemetryOutcome::Failure,
+        failure_class = ?FailureClass::from(kind),
+        service_id = %service_id,
+        environment_id = %environment_id,
+    );
+}
+
+fn trace_attempts(attempts: &[TransportAttemptReport]) {
+    for attempt in attempts {
+        match &attempt.outcome {
+            TransportAttemptOutcome::SecureReady => tracing::info!(
+                event_name = event_names::TRANSPORT_ATTEMPT,
+                outcome = ?TelemetryOutcome::SecureReady,
+                carrier = ?attempt.carrier,
+                source = ?attempt.source,
+            ),
+            TransportAttemptOutcome::Fallback { reason } => {
+                tracing::warn!(
+                    event_name = event_names::TRANSPORT_ATTEMPT,
+                    outcome = ?TelemetryOutcome::Fallback,
+                    carrier = ?attempt.carrier,
+                    source = ?attempt.source,
+                    fallback_reason = ?reason,
+                );
+                tracing::warn!(
+                    event_name = event_names::TRANSPORT_FALLBACK,
+                    outcome = ?TelemetryOutcome::Fallback,
+                    from = ?attempt.carrier,
+                    to = ?crate::Carrier::Wss,
+                    reason = ?reason,
+                );
+            }
+            TransportAttemptOutcome::Failed { kind, .. } => tracing::warn!(
+                event_name = event_names::TRANSPORT_ATTEMPT,
+                outcome = ?TelemetryOutcome::Failure,
+                carrier = ?attempt.carrier,
+                source = ?attempt.source,
+                failure_class = ?FailureClass::from(*kind),
+            ),
+        }
+    }
+}
+
+fn trace_terminal_failure(kind: SdkErrorKind) {
+    let failure_class = FailureClass::from(kind);
+    if matches!(
+        failure_class,
+        FailureClass::InnerNoiseFailure | FailureClass::InnerTrustFailure
+    ) {
+        tracing::warn!(
+            event_name = event_names::TRANSPORT_INNER_FAILURE,
+            outcome = ?TelemetryOutcome::Failure,
+            failure_class = ?failure_class,
+        );
     }
 }

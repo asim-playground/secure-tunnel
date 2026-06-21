@@ -53,6 +53,15 @@ impl LocalServiceFixture {
         quic_port: u16,
         wss_port: u16,
     ) -> ApiResult<ServiceDescriptor> {
+        self.descriptor_for_ports_with(quic_port, wss_port, |_| {})
+    }
+
+    pub(crate) fn descriptor_for_ports_with(
+        &self,
+        quic_port: u16,
+        wss_port: u16,
+        mutate: impl FnOnce(&mut ServiceDescriptor),
+    ) -> ApiResult<ServiceDescriptor> {
         let mut descriptor = self.lock_descriptor()?;
         let quic = descriptor
             .carriers
@@ -72,6 +81,7 @@ impl LocalServiceFixture {
         wss.url = format!("wss://127.0.0.1:{wss_port}/tunnel");
         WSS_SUBPROTOCOL_V1.clone_into(&mut wss.subprotocol);
         wss.authority_override = None;
+        mutate(&mut descriptor);
         descriptor.resign_with_example_key_for_testing()?;
         descriptor.validate()?;
         *self

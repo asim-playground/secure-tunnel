@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::auth::{AccountSessionContext, DeviceSessionContext, PendingDeviceChallenge};
 use crate::descriptor::BootstrapDescriptor;
 use crate::error::{SdkError, SdkResult};
+use crate::observability::{CloseClassification, FailureClass, TelemetryOutcome, event_names};
 use crate::reports::Carrier;
 
 /// Lifecycle state exposed by the SDK session object.
@@ -54,6 +55,8 @@ impl From<secure_tunnel_core::SessionPhase> for SessionState {
 pub struct CloseReport {
     /// Final session state observed by the SDK.
     pub final_state: SessionState,
+    /// Coarse close classification for routine logs and metrics.
+    pub classification: CloseClassification,
 }
 
 /// Opaque secure tunnel session object.
@@ -166,8 +169,23 @@ impl SecureTunnelSession {
             .await
             .map_err(|error| SdkError::from_core(&error));
         match result {
-            Ok(()) => lease.finish_closed(),
+            Ok(()) => {
+                tracing::info!(
+                    event_name = event_names::SESSION_CLOSE,
+                    outcome = ?TelemetryOutcome::Success,
+                    carrier = ?lease.carrier(),
+                    close_classification = ?CloseClassification::Graceful,
+                );
+                lease.finish_closed(CloseClassification::Graceful)
+            }
             Err(error) => {
+                tracing::warn!(
+                    event_name = event_names::SESSION_CLOSE,
+                    outcome = ?TelemetryOutcome::Failure,
+                    carrier = ?lease.carrier(),
+                    close_classification = ?CloseClassification::Truncated,
+                    failure_class = ?FailureClass::from(error.kind()),
+                );
                 lease.restore()?;
                 Err(error)
             }
@@ -232,13 +250,14 @@ impl SecureTunnelSession {
         Ok(())
     }
 
-    fn mark_closed(&self) -> SdkResult<CloseReport> {
+    fn mark_closed(&self, classification: CloseClassification) -> SdkResult<CloseReport> {
         let mut inner = self.lock_inner()?;
         inner.state = SessionState::Closed;
         inner.transport = None;
         drop(inner);
         Ok(CloseReport {
             final_state: SessionState::Closed,
+            classification,
         })
     }
 
@@ -305,9 +324,15 @@ impl TransportLease<'_> {
         )
     }
 
-    fn finish_closed(mut self) -> SdkResult<CloseReport> {
+    fn finish_closed(mut self, classification: CloseClassification) -> SdkResult<CloseReport> {
         self.transport = None;
-        self.session.mark_closed()
+        self.session.mark_closed(classification)
+    }
+
+    fn carrier(&self) -> Option<Carrier> {
+        self.transport
+            .as_ref()
+            .map(|transport| transport.carrier().into())
     }
 }
 

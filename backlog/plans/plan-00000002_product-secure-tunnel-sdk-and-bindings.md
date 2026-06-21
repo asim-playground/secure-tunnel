@@ -240,12 +240,12 @@ Rust facade and behavior.
     - `task-00000020` `implement account and device session protocol`
     - `task-00000021` `build end-to-end tunnel harness and cli smoke path`
 - Exit Criteria:
-    - [ ] a Rust caller can create a client, load a descriptor/config, connect,
+    - [x] a Rust caller can create a client, load a descriptor/config, connect,
           reach `Secure Ready`, authenticate, exchange application records, and
           close cleanly.
     - [x] both `QUIC` success and `WSS` fallback run through production
           adapters, not only test-only prototype transports.
-    - [ ] local end-to-end tests cover success, fallback, inner trust failure,
+    - [x] local end-to-end tests cover success, fallback, inner trust failure,
           and graceful close.
 
 ### Phase 2 - `managed network and observability`
@@ -336,7 +336,7 @@ Rust facade and behavior.
 | task-`00000021` | `build end-to-end tunnel harness and cli smoke path` | `Phase 1` | `task-00000019, task-00000020` | `completed` |
 | task-`00000013` | `allow optional custom ca cert for intercepted wss or quic` | `Phase 2` | `task-00000009, task-00000012, task-00000019` | `proposed` |
 | task-`00000014` | `allow optional http proxy for wss client` | `Phase 2` | `task-00000009, task-00000012, task-00000013, task-00000019` | `proposed` |
-| task-`00000022` | `add observability and conformance test matrix` | `Phase 2` | `task-00000009, task-00000013, task-00000014, task-00000021` | `proposed` |
+| task-`00000022` | `add observability and conformance test matrix` | `Phase 2` | `task-00000009, task-00000021` | `completed` |
 | task-`00000023` | `create uniffi sdk facade and bindgen tooling` | `Phase 3` | `task-00000018, task-00000021, task-00000022` | `proposed` |
 | task-`00000024` | `package swift sdk as swiftpm and xcframework` | `Phase 4` | `task-00000022, task-00000023` | `proposed` |
 | task-`00000025` | `package kotlin sdk as jvm or android artifact` | `Phase 4` | `task-00000022, task-00000023` | `proposed` |
@@ -404,8 +404,12 @@ Rust facade and behavior.
 
 ## Immediate Next Actions
 
-1. Start `task-00000022` to add the observability and conformance matrix over
-   the now-available end-to-end harness.
+1. Start `task-00000013` to add optional custom CA configuration for managed
+   TLS interception without weakening inner Noise trust.
+2. Start `task-00000014` to add optional `WSS` proxy support and close the
+   managed-network pending conformance rows.
+3. Start `task-00000023` once the desired managed-network gate is reached, so
+   UniFFI exposes the stabilized SDK facade and telemetry surface.
 
 ## Implementation Notes
 
@@ -448,6 +452,10 @@ Rust facade and behavior.
 - `2026-06-21`: `task-00000021` completed the local end-to-end harness and CLI
   smoke path over production SDK and transport adapters, with JSON smoke output
   and a dedicated `mise run smoke` task included in `mise run ci`.
+- `2026-06-21`: `task-00000022` completed stable SDK observability names,
+  tracing hooks, exact conformance CLI/mise automation, 13 runnable local
+  conformance scenarios, and pending rows for custom CA, proxied `WSS`, abrupt
+  close, and truncated close.
 
 ## Completion Checklist
 
@@ -470,3 +478,4 @@ Rust facade and behavior.
 - `2026-06-21` `Completed task 00000019 with production QUIC/WSS transport adapters, SDK default-port wiring, Rustls/Tungstenite supply-chain policy updates, and integration tests for secure-ready success/fallback/failure semantics.`
 - `2026-06-21` `Completed task 00000020 with NK1 service-static trust, signed descriptor authorization, build-time public-key pin obfuscation, account/device session protocol methods, and no-dial regressions for unauthorized descriptors and service keys.`
 - `2026-06-21` `Completed task 00000021 with secure-tunnel-harness, JSON-first CLI smoke scenarios for QUIC success and WSS fallback, SDK local TLS root config, and mise smoke automation in the CI task.`
+- `2026-06-21` `Completed task 00000022 with SDK observability taxonomy, redacted tracing hooks, exact conformance CLI/mise automation, and explicit pending managed-network rows.`

@@ -51,6 +51,11 @@ impl CarrierConnector for WssConnector {
                     "WSS connector received a non-WSS target",
                 ));
             };
+            tracing::debug!(
+                event_name = "transport.adapter_connect",
+                carrier = "wss",
+                phase = "connect_start"
+            );
             validate_wss_url(&target.url)?;
             let mut request = target
                 .url
@@ -80,6 +85,11 @@ impl CarrierConnector for WssConnector {
             .await
             .map_err(|error| map_wss_connect_error(&error))?;
             validate_selected_subprotocol(&response, &target.subprotocol)?;
+            tracing::debug!(
+                event_name = "transport.adapter_connect",
+                carrier = "wss",
+                phase = "connect_ready"
+            );
 
             Ok(Box::new(WssFramedDuplex { stream }) as Box<dyn FramedDuplex>)
         })

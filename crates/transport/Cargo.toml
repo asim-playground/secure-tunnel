@@ -22,6 +22,7 @@ rustls-platform-verifier = "0.7"
 secure-tunnel-core = { path = "../core", version = "0.1.0" }
 tokio = { version = "1", features = ["io-util", "net", "rt", "time"] }
 tokio-tungstenite = { version = "0.29", features = ["rustls-tls-native-roots"] }
+tracing = "0.1"
 url = "2"
 
 [dev-dependencies]

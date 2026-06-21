@@ -11,6 +11,7 @@
 //! production SDK client through descriptor loading, transport selection,
 //! `Secure Ready`, account auth, known-device auth, app exchange, and close.
 
+mod conformance;
 mod fixture;
 mod responder;
 mod server;
@@ -24,10 +25,15 @@ use thiserror::Error;
 use fixture::{LocalServiceFixture, SMOKE_PING, SMOKE_PONG};
 use server::{QuicServer, WssServer};
 
-const NOW_UNIX_SECONDS: u64 = 1_742_000_000;
-const NOW_UNIX_MS: u64 = 1_742_000_000_000;
-const DEVICE_KEY_ID: &str = "device-ed25519-smoke";
-const DEVICE_KEY_SEED: [u8; 32] = [11_u8; 32];
+pub use conformance::{
+    ConformanceReport, ConformanceScenario, ConformanceSuiteReport, PendingConformanceReport,
+    run_conformance_scenario, run_conformance_suite,
+};
+
+pub(crate) const NOW_UNIX_SECONDS: u64 = 1_742_000_000;
+pub(crate) const NOW_UNIX_MS: u64 = 1_742_000_000_000;
+pub(crate) const DEVICE_KEY_ID: &str = "device-ed25519-smoke";
+pub(crate) const DEVICE_KEY_SEED: [u8; 32] = [11_u8; 32];
 
 /// Result alias for local smoke harness operations.
 pub type HarnessResult<T> = Result<T, HarnessError>;
@@ -122,6 +128,8 @@ pub struct SmokeReport {
     pub session_state_before_close: secure_tunnel_sdk::SessionState,
     /// Final close state.
     pub close_final_state: secure_tunnel_sdk::SessionState,
+    /// Final close classification.
+    pub close_classification: secure_tunnel_sdk::CloseClassification,
     /// Sanitized transport attempts.
     pub attempts: Vec<secure_tunnel_sdk::TransportAttemptReport>,
 }
@@ -236,6 +244,7 @@ pub async fn run_smoke_scenario(scenario: SmokeScenario) -> HarnessResult<SmokeR
         application_exchange,
         session_state_before_close,
         close_final_state: close.final_state,
+        close_classification: close.classification,
         attempts,
     })
 }

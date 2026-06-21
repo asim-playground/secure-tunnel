@@ -20,8 +20,8 @@ use crate::error::{ConnectError, SdkErrorKind};
 use crate::planning::connect_plan_report;
 use crate::{
     AccountAuthMode, AccountAuthRequest, AccountFreshness, BootstrapDescriptor, CacheDisposition,
-    CancellationHandle, Carrier, ClientConfig, ConnectOptions, FallbackReason, SessionState,
-    TransportAttemptOutcome,
+    CancellationHandle, Carrier, ClientConfig, CloseClassification, ConnectOptions, FallbackReason,
+    SessionState, TransportAttemptOutcome,
 };
 use mock::MockPorts;
 
@@ -204,6 +204,7 @@ fn session_send_receive_request_and_close_use_mock_transport() {
     assert_eq!(ports.sent_records(), vec![vec![0x01], vec![0x03]]);
     assert_eq!(ports.close_count(), 1);
     assert_eq!(close_report.final_state, SessionState::Closed);
+    assert_eq!(close_report.classification, CloseClassification::Graceful);
     assert_eq!(outcome.session.state(), SessionState::Closed);
     let error = error_value(block_on(outcome.session.send(vec![0x05])));
     assert_eq!(error.kind(), SdkErrorKind::Closed);

@@ -19,6 +19,7 @@ mod cancellation;
 mod client;
 mod descriptor;
 mod error;
+mod observability;
 mod planning;
 mod ports;
 mod reports;
@@ -32,6 +33,10 @@ pub use cancellation::CancellationHandle;
 pub use client::{ClientConfig, ConnectOptions, ConnectOutcome, SecureTunnelClient};
 pub use descriptor::{BootstrapDescriptor, TransportPolicyConfig};
 pub use error::{ConnectError, ConnectResult, SdkError, SdkErrorKind, SdkResult};
+pub use observability::{
+    AuthStage, CloseClassification, FailureClass, TelemetryEvent, TelemetryOutcome, event_names,
+    metric_names,
+};
 pub use reports::{
     CacheDisposition, CandidateSource, Carrier, ConnectReport, FallbackReason,
     SecureChannelArtifacts, TransportAttemptOutcome, TransportAttemptReport,
@@ -39,5 +44,7 @@ pub use reports::{
 };
 pub use session::{CloseReport, SecureTunnelSession, SessionState};
 
+#[cfg(test)]
+mod observability_tests;
 #[cfg(test)]
 mod tests;

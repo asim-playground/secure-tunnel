@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+#MISE description="Run local end-to-end tunnel conformance scenarios"
+set -euo pipefail
+
+json="$(cargo run -p secure-tunnel-cli -- conformance --scenario all --format json)"
+printf '%s\n' "${json}" | jq -e '
+  .ok == true
+  and ([.scenarios[].scenario] == [
+    "quic_success",
+    "quic_rejected_wss_fallback",
+    "cached_quic_bad_wss_first",
+    "fallback_disabled",
+    "wrong_service_static_key_pin",
+    "wrong_descriptor_trust_anchor",
+    "expired_descriptor",
+    "descriptor_rollback",
+    "service_key_rotation_valid",
+    "service_key_rotation_invalid",
+    "stale_device_challenge",
+    "replayed_device_challenge",
+    "graceful_close"
+  ])
+  and ([.pending[].scenario] == [
+    "managed-custom-ca-product-ux",
+    "proxied-wss",
+    "abrupt-close",
+    "truncated-close"
+  ])
+' >/dev/null
+for forbidden in \
+  acct-smoke \
+  local-smoke-credential \
+  session-smoke \
+  device-ed25519-smoke \
+  smoke-ping \
+  smoke-pong \
+  account_id \
+  credential_payload \
+  canonical_bytes \
+  session_context_hash \
+  session_id \
+  signature \
+  service_static_public_key \
+  account_context_hash \
+  server_challenge \
+  device_public_key \
+  handshake_hash \
+  channel_binding
+do
+  if grep -Fq "${forbidden}" <<<"${json}"; then
+    printf 'conformance JSON leaked forbidden fixture value or field: %s\n' "${forbidden}" >&2
+    exit 1
+  fi
+done
+printf '%s\n' "${json}"

@@ -73,7 +73,7 @@ SDK smoke scenario before other SDK targets claim the same production bar.
 
 ## Task Dependencies
 
-- backlog/tasks/task-00000022_add-observability-and-conformance-test-matrix.md
+- backlog/tasks/completed/task-00000022_add-observability-and-conformance-test-matrix.md
 - backlog/tasks/task-00000023_create-uniffi-sdk-facade-and-bindgen-tooling.md
 - backlog/plans/plan-00000002_product-secure-tunnel-sdk-and-bindings.md
 

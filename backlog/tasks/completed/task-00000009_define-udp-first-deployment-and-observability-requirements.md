@@ -89,7 +89,7 @@ right signals and is tested against realistic network conditions.
 
 - backlog/tasks/task-00000013_allow-optional-custom-ca-cert-for-intercepted-wss-or-quic.md
 - backlog/tasks/task-00000014_allow-optional-http-proxy-for-wss-client.md
-- backlog/tasks/task-00000022_add-observability-and-conformance-test-matrix.md
+- backlog/tasks/completed/task-00000022_add-observability-and-conformance-test-matrix.md
 
 ## Backlog Bookkeeping
 
