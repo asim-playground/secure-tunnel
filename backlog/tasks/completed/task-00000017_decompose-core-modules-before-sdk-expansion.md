@@ -1,5 +1,14 @@
 # Task `00000017` - `decompose core modules before sdk expansion`
 
+## Final Summary
+
+Task `00000017` is complete. The oversized core modules were split without
+changing public exports or behavior: selector tests, Noise tests, prototype
+transport tests, and prototype scripted-responder fixtures now live in smaller
+sibling modules. All non-Markdown code files are at or below the repo's
+500-line review threshold, `mise run dev` passes, and independent review found
+no high/medium issues.
+
 ## Summary
 
 Split oversized Rust core modules before the product SDK and generated binding
@@ -8,7 +17,7 @@ surface expand around them.
 ## Motivation
 
 The current `selector.rs`, `noise.rs`, and `prototype_transport.rs` files are
-useful proving-slice code, but each exceeds the repo's 500-line non-Markdown
+useful proving-slice code, but each exceeded the repo's 500-line non-Markdown
 code-file review threshold. The SDK plan should not freeze those large modules
 into public contracts before the responsibilities are easier to review.
 
@@ -32,29 +41,29 @@ into public contracts before the responsibilities are easier to review.
 
 ### A) Oversized modules are split
 
-- [ ] `crates/core/src/selector.rs` is split into smaller modules with each
+- [x] `crates/core/src/selector.rs` is split into smaller modules with each
       non-Markdown code file at or below 500 lines.
-- [ ] `crates/core/src/noise.rs` is split into smaller modules with each
+- [x] `crates/core/src/noise.rs` is split into smaller modules with each
       non-Markdown code file at or below 500 lines.
-- [ ] `crates/core/src/prototype_transport.rs` is split into smaller test
+- [x] `crates/core/src/prototype_transport.rs` is split into smaller test
       modules with each non-Markdown code file at or below 500 lines.
 
 ### B) Behavior and public API are preserved
 
-- [ ] Existing public exports from `secure-tunnel-core` continue to compile
+- [x] Existing public exports from `secure-tunnel-core` continue to compile
       unless the task records a deliberate, reviewed API adjustment.
-- [ ] Existing selector, Noise, trust, and prototype transport tests continue
+- [x] Existing selector, Noise, trust, and prototype transport tests continue
       to cover the same behavior after the split.
-- [ ] Rustdoc remains present on public contracts introduced or moved by the
+- [x] Rustdoc remains present on public contracts introduced or moved by the
       decomposition.
 
 ### C) Reviewability improves before SDK work
 
-- [ ] The resulting module layout has clear ownership for selection policy,
+- [x] The resulting module layout has clear ownership for selection policy,
       attempt classification, Noise handshake, Noise transport mode, and
       prototype fixtures.
-- [ ] `mise run dev` passes.
-- [ ] Independent review finds no unresolved high/medium issues.
+- [x] `mise run dev` passes.
+- [x] Independent review finds no unresolved high/medium issues.
 
 ## Cross-Repo Boundaries
 
@@ -87,8 +96,34 @@ into public contracts before the responsibilities are easier to review.
 
 ## Implementation Notes
 
-- [ ] Implementation notes added with command evidence.
-- (fill in after completion)
+- [x] Implementation notes added with command evidence.
+- Split `selector.rs` by moving its test module into
+  `crates/core/src/selector/tests.rs`. The production selector module is now
+  478 lines and owns selection policy plus attempt classification.
+- Split `noise.rs` by moving its test module into
+  `crates/core/src/noise/tests.rs`. The production Noise module is now 210
+  lines and owns secure-ready evaluation plus Noise transport-mode framing.
+- Split `prototype_transport.rs` by moving:
+  - prototype transport tests into
+    `crates/core/src/prototype_transport/tests.rs`
+  - scripted responder fixtures into
+    `crates/core/src/prototype_transport/scripted_responder.rs`
+- Post-split line-count check:
+  - `selector.rs`: 478 lines
+  - `selector/tests.rs`: 415 lines
+  - `noise/tests.rs`: 410 lines
+  - `prototype_transport.rs`: 361 lines
+  - `prototype_transport/tests.rs`: 250 lines
+  - `prototype_transport/scripted_responder.rs`: 218 lines
+- Focused verification:
+  - `cargo fmt --all --check` passed.
+  - `cargo test -p secure-tunnel-core` passed with 30 tests.
+  - `find crates -name '*.rs' -not -path '*/target/*' -print0 | xargs -0 wc
+    -l | awk '$1 > 500 {print}'` printed no file paths.
+  - `mise run copyright-check` passed after adding headers to split test files.
+- Full verification:
+  - `mise run dev` passed, including format, lint, strict Clippy, Rust
+    nextest, doctests, Python tests, Go tests, and Go/WASM tests.
 
 ## Implementation Plan
 
@@ -100,8 +135,14 @@ into public contracts before the responsibilities are easier to review.
 
 ## Review Notes
 
+- Independent review found no high/medium findings.
+- Low review finding: the newly split Rust test files initially missed the
+  repo's MPL/SPDX header. Fixed by adding the standard headers and rerunning
+  `cargo fmt --all --check`, `cargo test -p secure-tunnel-core`, the file-size
+  scan, and `mise run copyright-check`.
+
 ## Acceptance Closure
 
-- [ ] All acceptance criteria are satisfied and marked.
-- [ ] Verification commands and outcomes are recorded.
-- [ ] No unresolved high/medium findings remain.
+- [x] All acceptance criteria are satisfied and marked.
+- [x] Verification commands and outcomes are recorded.
+- [x] No unresolved high/medium findings remain.

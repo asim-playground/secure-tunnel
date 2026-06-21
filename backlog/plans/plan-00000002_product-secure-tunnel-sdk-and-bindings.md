@@ -122,12 +122,11 @@ Rust facade and behavior.
 
 ### Core decomposition
 
-- Missing: large selector, Noise, and prototype transport modules remain above
-  the code-file size threshold.
-- Impact: the SDK facade could freeze awkward module boundaries and make later
-  security or transport review harder.
-- Notes: decomposition should preserve behavior first; public API redesign
-  belongs only where it helps the SDK facade.
+- Status: `task-00000017` split the oversized selector, Noise, and prototype
+  transport modules so every non-Markdown code file is at or below 500 lines.
+- Remaining impact: the SDK facade can now build on smaller reviewable modules
+  without freezing the proving-slice test layout into public contracts.
+- Notes: public API redesign remains deferred to `task-00000018`.
 
 ### Production transport and session behavior
 
@@ -197,7 +196,7 @@ Rust facade and behavior.
 
 ## Phase Plan
 
-- Current Phase: `Phase 0 - close foundation gates`
+- Current Phase: `Phase 1 - complete the Rust tunnel library`
 
 ### Phase 0 - `close foundation gates`
 
@@ -210,9 +209,9 @@ Rust facade and behavior.
 - Exit Criteria:
     - [x] active protocol, selection, and deployment docs are aligned with the
           code and task acceptance workflow.
-    - [ ] all non-Markdown code files touched by the SDK plan are at or below
+    - [x] all non-Markdown code files touched by the SDK plan are at or below
           500 lines, or have an explicit reviewed decomposition exception.
-    - [ ] `mise run dev` passes after the decomposition.
+    - [x] `mise run dev` passes after the decomposition.
 
 ### Phase 1 - `complete the Rust tunnel library`
 
@@ -312,7 +311,7 @@ Rust facade and behavior.
 | task-`00000007` | `define transport selection and fallback policy` | `Phase 0` | `task-00000003, task-00000004, task-00000006` | `completed` |
 | task-`00000008` | `write transport-agnostic v1 protocol plus quic and wss bindings` | `Phase 0` | `task-00000007` | `completed` |
 | task-`00000009` | `define udp-first deployment and observability requirements` | `Phase 0` | `task-00000007, task-00000008` | `completed` |
-| task-`00000017` | `decompose core modules before sdk expansion` | `Phase 0` | `task-00000016` | `proposed` |
+| task-`00000017` | `decompose core modules before sdk expansion` | `Phase 0` | `task-00000016` | `completed` |
 | task-`00000018` | `define product sdk facade and session contract` | `Phase 1` | `task-00000007, task-00000008, task-00000009, task-00000017` | `proposed` |
 | task-`00000019` | `implement production quic and wss carrier adapters` | `Phase 1` | `task-00000012, task-00000018` | `proposed` |
 | task-`00000020` | `implement account and device session protocol` | `Phase 1` | `task-00000006, task-00000011, task-00000018` | `proposed` |
@@ -387,9 +386,7 @@ Rust facade and behavior.
 
 ## Immediate Next Actions
 
-1. Start `task-00000017` to decompose oversized core modules before adding the
-   SDK facade.
-2. Start `task-00000018` to define the Rust SDK contract that UniFFI will later
+1. Start `task-00000018` to define the Rust SDK contract that UniFFI will later
    expose.
 
 ## Implementation Notes
@@ -413,6 +410,9 @@ Rust facade and behavior.
   be deprecated or deleted unless a future task proves concrete need.
 - `2026-06-21`: Foundation closure tasks `00000007`, `00000008`, and
   `00000009` completed; Phase 0 now waits on `task-00000017`.
+- `2026-06-21`: `task-00000017` completed the core module decomposition gate,
+  so the plan can advance to Phase 1 and the SDK facade contract work in
+  `task-00000018`.
 
 ## Completion Checklist
 
@@ -430,3 +430,4 @@ Rust facade and behavior.
 - `2026-06-21` `Review fix: UniFFI generation now depends on conformance, and Go packaging now waits for the Swift/iOS package task.`
 - `2026-06-21` `Resolved Go-WASM scope: native Go is the supported SDK path, while Go-WASM should be deprecated or deleted.`
 - `2026-06-21` `Marked foundation docs and tasks 00000007, 00000008, and 00000009 complete; task 00000017 is the remaining Phase 0 gate.`
+- `2026-06-21` `Completed task 00000017 and advanced the plan to Phase 1.`
