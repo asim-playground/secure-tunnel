@@ -5,6 +5,7 @@ members = [
     "crates/go",
     "crates/go-wasm",
     "crates/python",
+    "crates/sdk",
 ]
 
 resolver = "2"

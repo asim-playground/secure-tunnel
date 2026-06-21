@@ -84,21 +84,22 @@ Rust facade and behavior.
 - `plan-00000001` is active and has completed the major proving slices through
   `task-00000016`.
 - The Rust workspace has `secure-tunnel-core`, a CLI, a manual C ABI crate
-  named `secure-tunnel-ffi`, a PyO3 Python crate, and Go/Go-WASM binding
-  scaffolds. Go-WASM is now planned for deprecation or deletion rather than
-  supported SDK status.
+  named `secure-tunnel-ffi`, a product SDK facade crate named
+  `secure-tunnel-sdk`, a PyO3 Python crate, and Go/Go-WASM binding scaffolds.
+  Go-WASM is now planned for deprecation or deletion rather than supported SDK
+  status.
 - The manual C ABI currently exposes protocol constants and service descriptor
   JSON validation/normalization, with `crates/go/binding.h` and
   `crates/go/module.modulemap` tracked for Swift import groundwork.
 - The current Rust core can build a v1 descriptor, derive the Noise prologue,
   plan QUIC-first fallback candidates, evaluate `Secure Ready` over framed I/O,
   and test prototype QUIC/WSS behavior in a test-only harness.
+- The SDK facade defines the Rust product contract for descriptors, transport
+  policy, connect, cancellation, connect reports, failed-attempt reports,
+  security artifacts, sessions, send/receive/request, and close.
 - Real client carrier adapters, account login, known-device session behavior,
-  production server/harness wiring, and native SDK packages are not yet done.
-- `crates/core/src/selector.rs`, `crates/core/src/noise.rs`, and
-  `crates/core/src/prototype_transport.rs` exceed the repo's 500-line
-  non-Markdown code-file review threshold and should be decomposed before SDK
-  expansion.
+  production server/harness wiring, generated bindings, and native SDK
+  packages are not yet done.
 - Local reference material is available for SDK implementation:
   - `backlog/docs/2026-06-21_sdk-reference-repositories.md`
   - `/Users/asimi/Downloads/references/uniffi-rs`
@@ -116,17 +117,21 @@ Rust facade and behavior.
 - Status: tasks `00000007`, `00000008`, and `00000009` are completed and the
   active `v1-*` docs now cover transport selection, protocol bindings,
   descriptor shape, device policy, and UDP-first deployment/observability.
-- Remaining impact: the next SDK gate is code decomposition, not unresolved
-  protocol or deployment documentation.
-- Notes: `task-00000017` should land before defining the SDK facade.
+- Remaining impact: foundation planning is closed; Phase 1 now depends on
+  production transport/session implementation rather than unresolved protocol
+  documentation.
+- Notes: completed tasks `00000017` and `00000018` removed the decomposition
+  and facade-definition gates.
 
 ### Core decomposition
 
 - Status: `task-00000017` split the oversized selector, Noise, and prototype
   transport modules so every non-Markdown code file is at or below 500 lines.
-- Remaining impact: the SDK facade can now build on smaller reviewable modules
-  without freezing the proving-slice test layout into public contracts.
-- Notes: public API redesign remains deferred to `task-00000018`.
+- Remaining impact: future adapter and binding work can build on smaller
+  reviewable modules without freezing the proving-slice test layout into public
+  contracts.
+- Notes: public API redesign moved into the completed SDK facade in
+  `task-00000018`.
 
 ### Production transport and session behavior
 
@@ -140,11 +145,13 @@ Rust facade and behavior.
 
 ### Foreign SDK boundary
 
-- Missing: a stable Rust SDK facade and a dedicated UniFFI crate.
-- Impact: exposing internal core types now would leak transport internals,
-  create churn across language bindings, and make UniFFI upgrade breaks more
-  expensive.
-- Notes: prefer a UDL contract for the first SDK pass because reviewers can
+- Status: `task-00000018` added the stable Rust SDK facade above core without
+  exposing selector, Noise, trust, or carrier adapter internals.
+- Missing: a dedicated UniFFI crate, generated bindings, and native packaging.
+- Impact: binding work now has a stable Rust product API to wrap, but it still
+  cannot ship until real adapters, session auth, conformance, and packages
+  land.
+- Notes: prefer a UDL contract for the first UniFFI pass because reviewers can
   read it as a language-neutral API spec.
 
 ### Packaging and CI
@@ -312,7 +319,7 @@ Rust facade and behavior.
 | task-`00000008` | `write transport-agnostic v1 protocol plus quic and wss bindings` | `Phase 0` | `task-00000007` | `completed` |
 | task-`00000009` | `define udp-first deployment and observability requirements` | `Phase 0` | `task-00000007, task-00000008` | `completed` |
 | task-`00000017` | `decompose core modules before sdk expansion` | `Phase 0` | `task-00000016` | `completed` |
-| task-`00000018` | `define product sdk facade and session contract` | `Phase 1` | `task-00000007, task-00000008, task-00000009, task-00000017` | `proposed` |
+| task-`00000018` | `define product sdk facade and session contract` | `Phase 1` | `task-00000007, task-00000008, task-00000009, task-00000017` | `completed` |
 | task-`00000019` | `implement production quic and wss carrier adapters` | `Phase 1` | `task-00000012, task-00000018` | `proposed` |
 | task-`00000020` | `implement account and device session protocol` | `Phase 1` | `task-00000006, task-00000011, task-00000018` | `proposed` |
 | task-`00000021` | `build end-to-end tunnel harness and cli smoke path` | `Phase 1` | `task-00000019, task-00000020` | `proposed` |
@@ -379,15 +386,15 @@ Rust facade and behavior.
 |---|---|---|---|
 | Which package should become the first production-grade SDK target? | before `task-00000024` starts | Asim Ihsan | `resolved: Swift/iOS first; Kotlin/Python smoke parity until facade stabilizes` |
 | Should the UniFFI contract use UDL or proc macros? | during `task-00000023` | Asim Ihsan | `recommended: UDL first for a reviewable language-neutral API spec` |
-| What cancellation semantics should the SDK expose for long-running connect/session operations? | during `task-00000018` | Asim Ihsan | `open` |
+| What cancellation semantics should the SDK expose for long-running connect/session operations? | during `task-00000018` | Asim Ihsan | `resolved: connect accepts an explicit CancellationHandle; session operation futures are safe to drop/cancel via transport lease restoration, while explicit session cancellation handles remain future work if real adapters need them` |
 | Does Python ultimately use UniFFI only, PyO3 only, or a PyO3 wrapper over the shared facade? | during `task-00000026` | Asim Ihsan | `open` |
 | Should Flutter/Dart use Flutter Rust Bridge or direct Dart FFI plus ffigen first? | during `task-00000028` | Asim Ihsan | `recommended: Flutter Rust Bridge first, compare direct Dart FFI only if packaging evidence pushes that way` |
 | Should Go keep Go-WASM as supported SDK scope? | during `task-00000029` | Asim Ihsan | `resolved: native Go is supported; Go-WASM should be deprecated or deleted unless a future task proves concrete need` |
 
 ## Immediate Next Actions
 
-1. Start `task-00000018` to define the Rust SDK contract that UniFFI will later
-   expose.
+1. Start `task-00000019` to wire production `QUIC` and `WSS` carrier adapters
+   behind the SDK facade's private transport ports.
 
 ## Implementation Notes
 
@@ -413,6 +420,9 @@ Rust facade and behavior.
 - `2026-06-21`: `task-00000017` completed the core module decomposition gate,
   so the plan can advance to Phase 1 and the SDK facade contract work in
   `task-00000018`.
+- `2026-06-21`: `task-00000018` completed the product SDK facade crate and
+  session contract. Phase 1 now moves to production `QUIC`/`WSS` adapters in
+  `task-00000019`.
 
 ## Completion Checklist
 
@@ -431,3 +441,4 @@ Rust facade and behavior.
 - `2026-06-21` `Resolved Go-WASM scope: native Go is the supported SDK path, while Go-WASM should be deprecated or deleted.`
 - `2026-06-21` `Marked foundation docs and tasks 00000007, 00000008, and 00000009 complete; task 00000017 is the remaining Phase 0 gate.`
 - `2026-06-21` `Completed task 00000017 and advanced the plan to Phase 1.`
+- `2026-06-21` `Completed task 00000018 with a new secure-tunnel-sdk facade crate, connect/session contract, cancellation semantics, and mock-backed SDK tests.`

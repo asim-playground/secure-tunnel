@@ -1,0 +1,202 @@
+// Copyright 2026 Asim Ihsan
+//
+// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+// If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
+//
+// SPDX-License-Identifier: MPL-2.0
+
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+use crate::reports::TransportAttemptReport;
+
+/// Stable SDK error classes exposed above the transport and protocol internals.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SdkErrorKind {
+    /// The descriptor could not be decoded or failed v1 validation.
+    InvalidDescriptor,
+    /// The descriptor or runtime adapter set cannot provide a requested carrier.
+    UnavailableCarrier,
+    /// The outer network path failed before the inner channel was ready.
+    OuterPathFailure,
+    /// The outer TLS setup failed before the inner channel was ready.
+    ///
+    /// Production transport adapters introduced after this facade should map
+    /// TLS setup failures to this stable class.
+    OuterTlsFailure,
+    /// The outer proxy setup failed before the inner channel was ready.
+    ///
+    /// Production transport adapters introduced after this facade should map
+    /// proxy setup failures to this stable class.
+    OuterProxyFailure,
+    /// The outer `QUIC` carrier was rejected before the inner channel was ready.
+    OuterQuicRejected,
+    /// The outer `QUIC` carrier closed before the inner channel was ready.
+    OuterQuicClosedEarly,
+    /// Transport selection exhausted all usable candidates.
+    FallbackExhausted,
+    /// The inner Noise handshake failed.
+    InnerNoiseFailure,
+    /// The inner server trust check failed.
+    InnerTrustFailure,
+    /// Account or known-device authentication failed after `Secure Ready`.
+    AuthFailure,
+    /// An application payload exceeded the SDK limit.
+    PayloadTooLarge,
+    /// The caller attempted to use a closed session.
+    Closed,
+    /// The caller cancelled the operation.
+    Cancelled,
+    /// The SDK observed an invariant violation or unmapped internal failure.
+    Internal,
+}
+
+/// Error returned by the product SDK facade.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[error("{kind:?}: {message}")]
+pub struct SdkError {
+    kind: SdkErrorKind,
+    message: String,
+}
+
+impl SdkError {
+    /// Returns the stable machine-readable error class.
+    #[must_use]
+    pub const fn kind(&self) -> SdkErrorKind {
+        self.kind
+    }
+
+    /// Returns the human-readable diagnostic message.
+    #[must_use]
+    pub fn message(&self) -> String {
+        self.message.clone()
+    }
+
+    pub(super) fn new(kind: SdkErrorKind, message: impl Into<String>) -> Self {
+        Self {
+            kind,
+            message: message.into(),
+        }
+    }
+
+    pub(super) fn cancelled() -> Self {
+        Self::new(SdkErrorKind::Cancelled, "operation cancelled")
+    }
+
+    pub(super) fn closed() -> Self {
+        Self::new(SdkErrorKind::Closed, "secure tunnel session is closed")
+    }
+
+    pub(super) fn invalid_descriptor(message: impl Into<String>) -> Self {
+        Self::new(SdkErrorKind::InvalidDescriptor, message)
+    }
+
+    pub(super) fn internal(message: impl Into<String>) -> Self {
+        Self::new(SdkErrorKind::Internal, message)
+    }
+
+    pub(super) fn from_core(error: &secure_tunnel_core::ApiError) -> Self {
+        use secure_tunnel_core::ApiError;
+
+        match error {
+            ApiError::InvalidServiceDescriptor(message) => Self::invalid_descriptor(*message),
+            ApiError::UnavailableCarrier(carrier) | ApiError::MissingCarrierConnector(carrier) => {
+                Self::new(
+                    SdkErrorKind::UnavailableCarrier,
+                    format!("carrier `{carrier}` is not available"),
+                )
+            }
+            ApiError::RecordTooLarge { actual, max } => Self::new(
+                SdkErrorKind::PayloadTooLarge,
+                format!("payload size {actual} exceeds limit {max}"),
+            ),
+            ApiError::TransportPlanBlocked(message) => {
+                Self::new(SdkErrorKind::FallbackExhausted, *message)
+            }
+            ApiError::TransportFallback(reason) => Self::from_core_fallback(*reason),
+            ApiError::InnerNoiseFailure => Self::new(
+                SdkErrorKind::InnerNoiseFailure,
+                "inner Noise handshake failed",
+            ),
+            ApiError::InnerTrustFailure => {
+                Self::new(SdkErrorKind::InnerTrustFailure, "inner trust check failed")
+            }
+            ApiError::PostHandshakeAuthFailure => Self::new(
+                SdkErrorKind::AuthFailure,
+                "post-handshake authentication failed",
+            ),
+            ApiError::TransportSelectionExhausted => Self::new(
+                SdkErrorKind::FallbackExhausted,
+                "transport selection exhausted all candidates",
+            ),
+            ApiError::TransportSelectionExhaustedWithFallback(reason) => Self::new(
+                SdkErrorKind::FallbackExhausted,
+                format!("transport selection exhausted after `{reason}`"),
+            ),
+            ApiError::TransportSelectorInvariant(message) => Self::internal(*message),
+            ApiError::TransportClosed => Self::closed(),
+        }
+    }
+
+    fn from_core_fallback(reason: secure_tunnel_core::FallbackReason) -> Self {
+        let kind = match reason {
+            secure_tunnel_core::FallbackReason::OuterPathFailure => SdkErrorKind::OuterPathFailure,
+            secure_tunnel_core::FallbackReason::OuterQuicRejected => {
+                SdkErrorKind::OuterQuicRejected
+            }
+            secure_tunnel_core::FallbackReason::OuterQuicClosedEarly => {
+                SdkErrorKind::OuterQuicClosedEarly
+            }
+        };
+        Self::new(
+            kind,
+            format!("transport attempt may fall back after `{reason}`"),
+        )
+    }
+}
+
+/// Connect-specific error with transport attempt observability attached.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[error("{error}")]
+pub struct ConnectError {
+    /// Stable SDK error for the terminal connect failure.
+    pub error: SdkError,
+    /// Attempt trace collected before the failure, if selection started.
+    pub attempts: Vec<TransportAttemptReport>,
+}
+
+impl ConnectError {
+    /// Creates a connect error with no transport attempts.
+    #[must_use]
+    pub const fn without_attempts(error: SdkError) -> Self {
+        Self {
+            error,
+            attempts: Vec::new(),
+        }
+    }
+
+    /// Creates a connect error with an attempt trace.
+    #[must_use]
+    pub const fn with_attempts(error: SdkError, attempts: Vec<TransportAttemptReport>) -> Self {
+        Self { error, attempts }
+    }
+
+    /// Returns the stable machine-readable terminal error class.
+    #[must_use]
+    pub const fn kind(&self) -> SdkErrorKind {
+        self.error.kind()
+    }
+
+    /// Returns the human-readable terminal diagnostic message.
+    #[must_use]
+    pub fn message(&self) -> String {
+        self.error.message()
+    }
+}
+
+/// Result alias for SDK facade operations.
+pub type SdkResult<T> = Result<T, SdkError>;
+
+/// Result alias for SDK connect operations.
+pub type ConnectResult<T> = Result<T, ConnectError>;

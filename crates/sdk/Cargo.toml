@@ -1,0 +1,30 @@
+[package]
+name = "secure-tunnel-sdk"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+description = "Product SDK facade for Secure Tunnel"
+homepage = "https://github.com/asim-playground/secure-tunnel"
+repository = "https://github.com/asim-playground/secure-tunnel"
+documentation = "https://docs.rs/secure-tunnel-sdk"
+readme = "../../README.md"
+keywords = ["secure-tunnel", "sdk"]
+categories = ["development-tools"]
+
+[dependencies]
+secure-tunnel-core = { path = "../core", version = "0.1.0" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+
+[dev-dependencies]
+futures = "0.3"
+
+[lib]
+path = "src/lib.rs"
+
+[lints]
+workspace = true
