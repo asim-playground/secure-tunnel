@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#MISE description="Run all generated UniFFI binding smoke tests"
+set -euo pipefail
+
+mise run sdk:smoke-python
+mise run sdk:smoke-swift
+mise run sdk:smoke-kotlin

@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+#MISE description="Run end-to-end smoke through generated UniFFI Swift bindings"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+source mise-tasks/sdk/smoke-common.sh
+
+mise run sdk:generate-bindings
+mkdir -p target/sdk-smoke/swift
+
+fixture_json="$(mktemp "${TMPDIR:-/tmp}/secure-tunnel-swift-fixture.XXXXXX.json")"
+trap 'stop_secure_tunnel_fixture; rm -f "${fixture_json}"' EXIT
+
+lib_name="$(secure_tunnel_library_name)"
+start_secure_tunnel_fixture "${fixture_json}"
+swiftc \
+  -parse-as-library \
+  -I target/generated-bindings/uniffi/swift \
+  -Xcc -fmodule-map-file=target/generated-bindings/uniffi/swift/secure_tunnel_sdk_ffiFFI.modulemap \
+  -L target/debug \
+  -lsecure_tunnel_sdk_ffi \
+  target/generated-bindings/uniffi/swift/secure_tunnel_sdk_ffi.swift \
+  bindings/smoke/swift/main.swift \
+  -o target/sdk-smoke/swift/secure-tunnel-swift-smoke
+
+DYLD_LIBRARY_PATH="target/debug${DYLD_LIBRARY_PATH:+:${DYLD_LIBRARY_PATH}}" \
+LD_LIBRARY_PATH="target/debug${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
+  target/sdk-smoke/swift/secure-tunnel-swift-smoke "${fixture_json}"
+
+test -s "target/debug/${lib_name}"

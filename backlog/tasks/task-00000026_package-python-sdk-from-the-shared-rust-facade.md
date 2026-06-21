@@ -52,6 +52,11 @@ ships both during migration.
 - [ ] Add a clean-environment import test.
 - [ ] Run at least one descriptor/config/session scenario through the Python
       package or a documented local fixture.
+- [ ] Preserve or upgrade the task-23 Python generated-client smoke that
+      already connects, authenticates, sends one encrypted application request,
+      and closes against the Rust fixture.
+- [ ] Coordinate with `task-00000030` so Python client packaging and the
+      Python FastAPI server package do not diverge in facade shape.
 - [ ] `mise run dev` and Python package checks pass.
 
 ## Cross-Repo Boundaries
@@ -70,13 +75,14 @@ ships both during migration.
 ## Task Dependencies
 
 - backlog/tasks/completed/task-00000022_add-observability-and-conformance-test-matrix.md
-- backlog/tasks/task-00000023_create-uniffi-sdk-facade-and-bindgen-tooling.md
+- backlog/tasks/completed/task-00000023_create-uniffi-sdk-facade-and-bindgen-tooling.md
 - backlog/plans/plan-00000002_product-secure-tunnel-sdk-and-bindings.md
 
 ## Reference Tasks
 
 - backlog/tasks/completed/task-00000015_stabilize-ci-portability-and-add-docker-repro.md
 - backlog/tasks/completed/task-00000016_update-runtimes-deps-and-add-swift-callable-library-surface.md
+- backlog/tasks/task-00000030_build-python-fastapi-server-and-rust-client-e2e.md
 
 ## Backlog Bookkeeping
 

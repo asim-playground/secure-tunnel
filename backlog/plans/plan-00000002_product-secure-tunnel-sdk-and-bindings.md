@@ -13,7 +13,7 @@ superseded_by: []
 - Status: `draft`
 - Owner: `Asim Ihsan`
 - Related Plans: `plan-00000001`
-- Related Tasks: `task-00000007, task-00000008, task-00000009, task-00000013, task-00000014, task-00000017, task-00000018, task-00000019, task-00000020, task-00000021, task-00000022, task-00000023, task-00000024, task-00000025, task-00000026, task-00000027, task-00000028, task-00000029`
+- Related Tasks: `task-00000007, task-00000008, task-00000009, task-00000013, task-00000014, task-00000017, task-00000018, task-00000019, task-00000020, task-00000021, task-00000022, task-00000023, task-00000024, task-00000025, task-00000026, task-00000027, task-00000028, task-00000029, task-00000030`
 
 ## Summary
 
@@ -214,7 +214,7 @@ Rust facade and behavior.
 
 ## Phase Plan
 
-- Current Phase: `Phase 1 - complete the Rust tunnel library`
+- Current Phase: `Phase 4 - package native SDKs`
 
 ### Phase 0 - `close foundation gates`
 
@@ -270,11 +270,11 @@ Rust facade and behavior.
 - Candidate Tasks:
     - `task-00000023` `create uniffi sdk facade and bindgen tooling`
 - Exit Criteria:
-    - [ ] `uniffi` and the project-local bindgen binary are pinned in the
+    - [x] `uniffi` and the project-local bindgen binary are pinned in the
           workspace dependency graph.
-    - [ ] generated Swift, Kotlin, and Python bindings expose only the approved
+    - [x] generated Swift, Kotlin, and Python bindings expose only the approved
           SDK facade.
-    - [ ] generated bindings pass language-level import/build smoke tests.
+    - [x] generated bindings pass language-level import/build smoke tests.
 
 ### Phase 4 - `package native SDKs`
 
@@ -284,6 +284,7 @@ Rust facade and behavior.
     - `task-00000024` `package swift sdk as swiftpm and xcframework`
     - `task-00000025` `package kotlin sdk as jvm or android artifact`
     - `task-00000026` `package python sdk from the shared rust facade`
+    - `task-00000030` `build python fastapi server and rust client e2e`
 - Exit Criteria:
     - [ ] Swift/iOS is the first production-grade SDK package and can run a
           descriptor/session smoke test.
@@ -291,6 +292,8 @@ Rust facade and behavior.
           or the documented UniFFI backend.
     - [ ] Python can import the package and run the same scenario, with a clear
           decision on whether UniFFI replaces or wraps the existing PyO3 path.
+    - [ ] Rust client can run the same scenario against a Python FastAPI server
+          fixture without changing protocol semantics.
     - [ ] Kotlin and Python are at least at generated-binding and package smoke
           parity before release CI treats them as supported SDK targets.
 
@@ -337,10 +340,11 @@ Rust facade and behavior.
 | task-`00000013` | `allow optional custom ca cert for intercepted wss or quic` | `Phase 2` | `task-00000009, task-00000012, task-00000019` | `proposed` |
 | task-`00000014` | `allow optional http proxy for wss client` | `Phase 2` | `task-00000009, task-00000012, task-00000013, task-00000019` | `proposed` |
 | task-`00000022` | `add observability and conformance test matrix` | `Phase 2` | `task-00000009, task-00000021` | `completed` |
-| task-`00000023` | `create uniffi sdk facade and bindgen tooling` | `Phase 3` | `task-00000018, task-00000021, task-00000022` | `proposed` |
+| task-`00000023` | `create uniffi sdk facade and bindgen tooling` | `Phase 3` | `task-00000018, task-00000021, task-00000022` | `completed` |
 | task-`00000024` | `package swift sdk as swiftpm and xcframework` | `Phase 4` | `task-00000022, task-00000023` | `proposed` |
 | task-`00000025` | `package kotlin sdk as jvm or android artifact` | `Phase 4` | `task-00000022, task-00000023` | `proposed` |
 | task-`00000026` | `package python sdk from the shared rust facade` | `Phase 4` | `task-00000022, task-00000023` | `proposed` |
+| task-`00000030` | `build python fastapi server and rust client e2e` | `Phase 4` | `task-00000023` | `proposed` |
 | task-`00000028` | `package flutter dart sdk using rust facade` | `Phase 5` | `task-00000018, task-00000021, task-00000022, task-00000024` | `proposed` |
 | task-`00000029` | `package go sdk over stable c abi` | `Phase 5` | `task-00000016, task-00000018, task-00000021, task-00000022, task-00000024` | `proposed` |
 | task-`00000027` | `add sdk release ci and versioning` | `Phase 6` | `task-00000022, task-00000024, task-00000025, task-00000026, task-00000028, task-00000029` | `proposed` |
@@ -369,7 +373,7 @@ Rust facade and behavior.
 - Definition of Done:
     - [ ] Phase 0 foundation tasks are closed or explicitly refreshed.
     - [ ] Rust library can run the end-to-end local secure tunnel scenario.
-    - [ ] Swift, Kotlin, and Python bindings are generated from the same pinned
+    - [x] Swift, Kotlin, and Python bindings are generated from the same pinned
           facade.
     - [ ] Swift/iOS is the first production-grade SDK package target.
     - [ ] Flutter/Dart and Go package tasks exist and share the same Rust SDK
@@ -399,17 +403,19 @@ Rust facade and behavior.
 | Should the UniFFI contract use UDL or proc macros? | during `task-00000023` | Asim Ihsan | `recommended: UDL first for a reviewable language-neutral API spec` |
 | What cancellation semantics should the SDK expose for long-running connect/session operations? | during `task-00000018` | Asim Ihsan | `resolved: connect accepts an explicit CancellationHandle; session operation futures are safe to drop/cancel via transport lease restoration, while explicit session cancellation handles remain future work if real adapters need them` |
 | Does Python ultimately use UniFFI only, PyO3 only, or a PyO3 wrapper over the shared facade? | during `task-00000026` | Asim Ihsan | `open` |
+| Should the Python FastAPI server use PyO3/maturin, UniFFI Python, or a small wrapper over a Rust native library? | during `task-00000030` | Asim Ihsan | `open` |
 | Should Flutter/Dart use Flutter Rust Bridge or direct Dart FFI plus ffigen first? | during `task-00000028` | Asim Ihsan | `recommended: Flutter Rust Bridge first, compare direct Dart FFI only if packaging evidence pushes that way` |
 | Should Go keep Go-WASM as supported SDK scope? | during `task-00000029` | Asim Ihsan | `resolved: native Go is supported; Go-WASM should be deprecated or deleted unless a future task proves concrete need` |
 
 ## Immediate Next Actions
 
-1. Start `task-00000013` to add optional custom CA configuration for managed
-   TLS interception without weakening inner Noise trust.
-2. Start `task-00000014` to add optional `WSS` proxy support and close the
-   managed-network pending conformance rows.
-3. Start `task-00000023` once the desired managed-network gate is reached, so
-   UniFFI exposes the stabilized SDK facade and telemetry surface.
+1. Start `task-00000024` to package the Swift SDK as the first production-grade
+   SwiftPM/XCFramework target.
+2. Start `task-00000026` and `task-00000030` together if Python client package
+   ergonomics and Python FastAPI server interop should share one packaging
+   decision.
+3. Keep `task-00000013` and `task-00000014` queued for managed-network support
+   before declaring the SDK broadly production-ready.
 
 ## Implementation Notes
 
@@ -456,6 +462,12 @@ Rust facade and behavior.
   tracing hooks, exact conformance CLI/mise automation, 13 runnable local
   conformance scenarios, and pending rows for custom CA, proxied `WSS`, abrupt
   close, and truncated close.
+- `2026-06-21`: `task-00000023` completed a pinned UniFFI facade and
+  project-local bindgen binary, generated Swift/Kotlin/Python sources under
+  `target/generated-bindings/uniffi`, exposed descriptor trust anchors,
+  failed-connect attempt diagnostics, and secure channel artifacts across the
+  FFI boundary, and added end-to-end generated-client smokes against the Rust
+  fixture. Python FastAPI server interop was split into `task-00000030`.
 
 ## Completion Checklist
 
@@ -479,3 +491,4 @@ Rust facade and behavior.
 - `2026-06-21` `Completed task 00000020 with NK1 service-static trust, signed descriptor authorization, build-time public-key pin obfuscation, account/device session protocol methods, and no-dial regressions for unauthorized descriptors and service keys.`
 - `2026-06-21` `Completed task 00000021 with secure-tunnel-harness, JSON-first CLI smoke scenarios for QUIC success and WSS fallback, SDK local TLS root config, and mise smoke automation in the CI task.`
 - `2026-06-21` `Completed task 00000022 with SDK observability taxonomy, redacted tracing hooks, exact conformance CLI/mise automation, and explicit pending managed-network rows.`
+- `2026-06-21` `Completed task 00000023 with pinned UniFFI UDL/bindgen tooling, generated Swift/Kotlin/Python smoke clients, and a follow-up FastAPI server interop task.`

@@ -7,7 +7,9 @@ members = [
     "crates/harness",
     "crates/python",
     "crates/sdk",
+    "crates/sdk-ffi",
     "crates/transport",
+    "crates/uniffi-bindgen",
 ]
 
 resolver = "2"
@@ -36,3 +38,6 @@ unwrap_used = "deny"
 expect_used = "deny"
 dbg_macro = "deny"
 todo = "deny"
+
+[workspace.dependencies]
+uniffi = "=0.31.2"

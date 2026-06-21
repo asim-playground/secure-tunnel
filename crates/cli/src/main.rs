@@ -8,11 +8,12 @@
 //! Command-line interface for Secure Tunnel.
 
 use std::fmt;
+use std::io::Write as _;
 use std::str::FromStr;
 
 use secure_tunnel_harness::{
     ConformanceScenario, ConformanceSuiteReport, SmokeScenario, run_conformance_scenario,
-    run_conformance_suite, run_smoke_scenarios,
+    run_conformance_suite, run_smoke_scenarios, start_binding_fixture_server,
 };
 
 #[tokio::main]
@@ -31,6 +32,7 @@ async fn run(args: Vec<String>) -> Result<(), CliError> {
         }
         Some("smoke") => run_smoke_command(&args[1..]).await,
         Some("conformance") => run_conformance_command(&args[1..]).await,
+        Some("binding-fixture") => run_binding_fixture_command(&args[1..]).await,
         Some("-h" | "--help") => {
             print_usage();
             Ok(())
@@ -66,6 +68,18 @@ async fn run_conformance_command(args: &[String]) -> Result<(), CliError> {
     Ok(())
 }
 
+async fn run_binding_fixture_command(args: &[String]) -> Result<(), CliError> {
+    let Some(_options) = BindingFixtureOptions::parse(args)? else {
+        return Ok(());
+    };
+    let server = start_binding_fixture_server().await?;
+    println!("{}", serde_json::to_string(server.report())?);
+    std::io::stdout().flush()?;
+    tokio::signal::ctrl_c().await?;
+    drop(server);
+    Ok(())
+}
+
 fn print_metadata() {
     let descriptor = secure_tunnel_core::example_service_descriptor();
     println!("secure-tunnel-cli");
@@ -84,6 +98,7 @@ fn print_usage() {
         "  secure-tunnel-cli smoke [--scenario all|quic-success|wss-fallback] [--format json]"
     );
     println!("  secure-tunnel-cli conformance [--scenario all|<name>] [--format json]");
+    println!("  secure-tunnel-cli binding-fixture [--format json]");
 }
 
 struct SmokeOptions {
@@ -176,10 +191,41 @@ impl ConformanceOptions {
     }
 }
 
+struct BindingFixtureOptions;
+
+impl BindingFixtureOptions {
+    fn parse(args: &[String]) -> Result<Option<Self>, CliError> {
+        let mut format = "json".to_owned();
+        let mut index = 0_usize;
+        while index < args.len() {
+            match args[index].as_str() {
+                "-h" | "--help" => {
+                    print_usage();
+                    return Ok(None);
+                }
+                "--format" => {
+                    index += 1;
+                    format.clone_from(
+                        args.get(index)
+                            .ok_or(CliError::usage("--format requires a value"))?,
+                    );
+                }
+                _ => return Err(CliError::usage("unknown binding-fixture option")),
+            }
+            index += 1;
+        }
+        if format != "json" {
+            return Err(CliError::usage("only --format json is supported"));
+        }
+        Ok(Some(Self))
+    }
+}
+
 #[derive(Debug)]
 enum CliError {
     Usage(&'static str),
     Harness(secure_tunnel_harness::HarnessError),
+    Io(std::io::Error),
     Json(serde_json::Error),
 }
 
@@ -191,7 +237,7 @@ impl CliError {
     const fn exit_code(&self) -> i32 {
         match self {
             Self::Usage(_) => 2,
-            Self::Harness(_) | Self::Json(_) => 1,
+            Self::Harness(_) | Self::Io(_) | Self::Json(_) => 1,
         }
     }
 }
@@ -208,11 +254,18 @@ impl From<serde_json::Error> for CliError {
     }
 }
 
+impl From<std::io::Error> for CliError {
+    fn from(value: std::io::Error) -> Self {
+        Self::Io(value)
+    }
+}
+
 impl fmt::Display for CliError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Usage(message) => write!(formatter, "{message}"),
             Self::Harness(error) => write!(formatter, "harness failed: {error}"),
+            Self::Io(error) => write!(formatter, "io failed: {error}"),
             Self::Json(error) => write!(formatter, "json failed: {error}"),
         }
     }

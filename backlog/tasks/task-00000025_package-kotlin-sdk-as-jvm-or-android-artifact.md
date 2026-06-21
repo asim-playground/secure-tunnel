@@ -43,6 +43,9 @@ needs an explicit artifact and smoke test instead of only generated source.
 - [ ] Add a Kotlin/JVM or Android import/build smoke test.
 - [ ] Run at least one descriptor/config/session scenario through the Kotlin
       package or a documented local fixture.
+- [ ] Preserve or upgrade the task-23 Kotlin generated-client smoke that
+      already connects, authenticates, sends one encrypted application request,
+      and closes against the Rust fixture.
 - [ ] Record any JNA/JNI/performance caveats discovered during the task.
 
 ### C) Packaging is automated
@@ -68,7 +71,7 @@ needs an explicit artifact and smoke test instead of only generated source.
 ## Task Dependencies
 
 - backlog/tasks/completed/task-00000022_add-observability-and-conformance-test-matrix.md
-- backlog/tasks/task-00000023_create-uniffi-sdk-facade-and-bindgen-tooling.md
+- backlog/tasks/completed/task-00000023_create-uniffi-sdk-facade-and-bindgen-tooling.md
 - backlog/plans/plan-00000002_product-secure-tunnel-sdk-and-bindings.md
 
 ## Reference Tasks

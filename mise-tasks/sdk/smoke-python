@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+#MISE description="Run end-to-end smoke through generated UniFFI Python bindings"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+source mise-tasks/sdk/smoke-common.sh
+
+mise run sdk:generate-bindings
+fixture_json="$(mktemp "${TMPDIR:-/tmp}/secure-tunnel-python-fixture.XXXXXX.json")"
+trap 'stop_secure_tunnel_fixture; rm -f "${fixture_json}"' EXIT
+
+start_secure_tunnel_fixture "${fixture_json}"
+PYTHONPATH="target/generated-bindings/uniffi/python${PYTHONPATH:+:${PYTHONPATH}}" \
+  python3 bindings/smoke/python/client.py "${fixture_json}"

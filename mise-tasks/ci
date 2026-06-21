@@ -3,6 +3,7 @@
 set -euo pipefail
 
 mise run build-all
+mise run sdk:check-bindings
 mise run lint-all
 mise run test-all
 mise run smoke

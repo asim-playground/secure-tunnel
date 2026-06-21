@@ -11,6 +11,7 @@
 //! production SDK client through descriptor loading, transport selection,
 //! `Secure Ready`, account auth, known-device auth, app exchange, and close.
 
+mod binding_fixture;
 mod conformance;
 mod fixture;
 mod responder;
@@ -25,6 +26,9 @@ use thiserror::Error;
 use fixture::{LocalServiceFixture, SMOKE_PING, SMOKE_PONG};
 use server::{QuicServer, WssServer};
 
+pub use binding_fixture::{
+    BindingFixtureReport, BindingFixtureServer, start_binding_fixture_server,
+};
 pub use conformance::{
     ConformanceReport, ConformanceScenario, ConformanceSuiteReport, PendingConformanceReport,
     run_conformance_scenario, run_conformance_suite,

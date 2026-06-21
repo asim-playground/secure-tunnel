@@ -1,0 +1,178 @@
+namespace secure_tunnel_sdk_ffi {
+  string protocol_id_v1();
+  [Throws=SecureTunnelError]
+  string example_descriptor_json();
+  [Throws=SecureTunnelError]
+  string normalize_descriptor_json(string descriptor_json);
+  ClientConfig default_client_config();
+};
+
+[Traits=(Debug, Display)]
+interface SecureTunnelError {
+  string kind();
+  string message();
+  sequence<TransportAttemptReport> attempts();
+};
+
+enum Carrier {
+  "Quic",
+  "Wss",
+};
+
+enum CandidateSource {
+  "PreferredCarrier",
+  "FallbackCarrier",
+  "CachedQuicBadNetwork",
+  "QuicReprobeAfterCachedFallback",
+};
+
+enum FallbackReason {
+  "OuterPathFailure",
+  "OuterQuicRejected",
+  "OuterQuicClosedEarly",
+};
+
+enum CacheDisposition {
+  "LiveProbe",
+  "CachedFallback",
+  "Reprobe",
+};
+
+enum TransportAttemptOutcome {
+  "SecureReady",
+  "Fallback",
+  "Failed",
+};
+
+enum AccountAuthMode {
+  "Fresh",
+  "Resume",
+};
+
+enum AccountFreshness {
+  "Fresh",
+  "Resumed",
+};
+
+enum DeviceState {
+  "Active",
+  "Pending",
+};
+
+enum SessionState {
+  "CarrierReady",
+  "NoiseHandshake",
+  "SecureReady",
+  "AccountAuthenticated",
+  "KnownDeviceAuthenticated",
+  "Closing",
+  "Closed",
+};
+
+enum CloseClassification {
+  "Graceful",
+  "Abrupt",
+  "Truncated",
+};
+
+dictionary ClientConfig {
+  u64 quic_reprobe_delay_seconds;
+  sequence<bytes> outer_root_certificates_der;
+  sequence<DescriptorTrustAnchor> descriptor_trust_anchors;
+  sequence<bytes> pinned_service_static_public_keys;
+};
+
+dictionary DescriptorTrustAnchor {
+  string key_id;
+  string algorithm;
+  string public_key;
+};
+
+dictionary ConnectOptions {
+  string descriptor_json;
+  u64 now_unix_seconds;
+  TransportCacheSnapshot? transport_cache;
+};
+
+dictionary TransportCacheSnapshot {
+  Carrier? last_successful_carrier;
+  FallbackReason? last_quic_failure;
+  u64? next_quic_probe_after_unix_seconds;
+  u64? highest_descriptor_serial;
+};
+
+dictionary TransportAttemptReport {
+  Carrier carrier;
+  CandidateSource source;
+  TransportAttemptOutcome outcome;
+  FallbackReason? fallback_reason;
+  string? failure_kind;
+  string? failure_message;
+};
+
+dictionary ConnectReport {
+  Carrier selected_carrier;
+  CacheDisposition cache_state;
+  FallbackReason? fallback_reason;
+  sequence<TransportAttemptReport> attempts;
+  TransportCacheSnapshot transport_cache;
+};
+
+dictionary AccountAuthReport {
+  string account_id;
+  string session_context_id;
+  bytes account_context_hash;
+  AccountFreshness freshness;
+};
+
+dictionary AccountAuthRequest {
+  string account_id;
+  bytes credential_payload;
+  AccountAuthMode mode;
+};
+
+dictionary DeviceAuthChallenge {
+  string device_key_id;
+  bytes server_challenge;
+  u64 expires_at_unix_ms;
+  bytes canonical_bytes;
+};
+
+dictionary DeviceAuthReport {
+  string device_key_id;
+  DeviceState state;
+};
+
+dictionary CloseReport {
+  SessionState final_state;
+  CloseClassification classification;
+};
+
+dictionary SecureChannelArtifacts {
+  bytes? handshake_hash;
+  bytes? channel_binding;
+  bytes? service_static_public_key;
+};
+
+interface SecureTunnelClient {
+  [Throws=SecureTunnelError]
+  constructor(ClientConfig config);
+  [Throws=SecureTunnelError]
+  SecureTunnelConnection connect(ConnectOptions options);
+};
+
+interface SecureTunnelConnection {
+  ConnectReport report();
+  SecureChannelArtifacts security_artifacts();
+  SessionState state();
+  [Throws=SecureTunnelError]
+  AccountAuthReport authenticate_account(AccountAuthRequest request);
+  [Throws=SecureTunnelError]
+  DeviceAuthChallenge begin_known_device_auth(string device_key_id);
+  [Throws=SecureTunnelError]
+  DeviceAuthReport finish_known_device_auth(DeviceAuthChallenge challenge, bytes signature, u64 now_unix_ms);
+  [Throws=SecureTunnelError]
+  bytes request(bytes payload);
+  [Throws=SecureTunnelError]
+  CloseReport close(u16 code, boolean drain);
+};

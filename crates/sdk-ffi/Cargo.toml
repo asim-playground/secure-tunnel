@@ -1,0 +1,43 @@
+[package]
+name = "secure-tunnel-sdk-ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+description = "UniFFI facade for Secure Tunnel SDK clients"
+homepage = "https://github.com/asim-playground/secure-tunnel"
+repository = "https://github.com/asim-playground/secure-tunnel"
+documentation = "https://docs.rs/secure-tunnel-sdk-ffi"
+readme = "../../README.md"
+keywords = ["secure-tunnel", "sdk", "uniffi"]
+categories = ["api-bindings", "network-programming"]
+
+[lib]
+name = "secure_tunnel_sdk_ffi"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib", "staticlib"]
+
+[dependencies]
+secure-tunnel-core = { path = "../core", version = "0.1.0" }
+secure-tunnel-sdk = { path = "../sdk", version = "0.1.0" }
+thiserror = "2.0"
+tokio = { version = "1", features = ["rt-multi-thread"] }
+uniffi = { workspace = true }
+
+[build-dependencies]
+uniffi = { workspace = true, features = ["build"] }
+
+[lints.rust]
+unsafe_code = "allow"
+missing_docs = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+dbg_macro = "deny"
+todo = "deny"
