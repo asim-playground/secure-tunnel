@@ -330,7 +330,7 @@ Rust facade and behavior.
           checks.
     - [x] release docs identify which targets are production-grade versus smoke
           parity.
-    - [ ] Go public module/native library release layout is settled or
+    - [x] Go public module/native library release layout is settled or
           explicitly left internal-only for the release.
 
 ## Backlog Task Map
@@ -358,7 +358,7 @@ Rust facade and behavior.
 | task-`00000029` | `package go sdk over stable c abi` | `Phase 5` | `task-00000016, task-00000018, task-00000021, task-00000022, task-00000024` | `completed` |
 | task-`00000032` | `harden go sdk cache and failure reporting` | `Phase 6` | `task-00000029` | `completed` |
 | task-`00000027` | `add sdk release ci and versioning` | `Phase 6` | `task-00000022, task-00000024, task-00000025, task-00000026, task-00000028, task-00000029, task-00000032` | `completed` |
-| task-`00000033` | `stabilize public go module release layout` | `Phase 6` | `task-00000027, task-00000029, task-00000032` | `proposed` |
+| task-`00000033` | `stabilize public go module release layout` | `Phase 6` | `task-00000027, task-00000029, task-00000032` | `completed` |
 
 ## Validation Strategy
 
@@ -424,10 +424,10 @@ Rust facade and behavior.
 
 ## Immediate Next Actions
 
-1. Start `task-00000033`, so native Go moves from an internal source artifact
-   to a release-consumable public module/native library layout.
-2. Keep `task-00000013` and `task-00000014` queued for managed-network support
+1. Keep `task-00000013` and `task-00000014` queued for managed-network support
    before declaring the SDK broadly production-ready.
+2. Decide whether the next release hardening slice should add macOS/Windows Go
+   artifact matrix coverage or move to custom CA/proxy managed-network work.
 
 ## Implementation Notes
 
@@ -564,3 +564,4 @@ Rust facade and behavior.
 - `2026-06-22` `Completed task 00000028 and task 00000029, moved the plan to Phase 6 release work, and added task 00000032 for residual Go SDK cache/error hardening before release CI.`
 - `2026-06-22` `Completed task 00000032 and made task 00000027 the next Phase 6 release action.`
 - `2026-06-22` `Completed task 00000027 with dry-run SDK release CI, version metadata checks, artifact manifests/checksums, stable snake_case SDK error strings, and task 00000033 for public Go module/native library release layout.`
+- `2026-06-22` `Completed task 00000033 by moving native Go to the public submodule path, packaging a release-consumable Go module bundle with native metadata and host library, and adding an external consumer release smoke.`

@@ -19,6 +19,7 @@ case "$(uname -s)" in
     mise run python:smoke-wheel
     mise run sdk:flutter
     mise run sdk:go
+    cargo build -p secure-tunnel-ffi --lib --release
     ;;
   CYGWIN* | MINGW* | MSYS*)
     packages=""
@@ -32,3 +33,6 @@ case "$(uname -s)" in
 esac
 
 SECURE_TUNNEL_SDK_RELEASE_PACKAGES="${packages}" mise run sdk:release:manifest
+if [[ ",${packages}," == *",go,"* ]]; then
+  SECURE_TUNNEL_GO_RELEASE_SKIP_MANIFEST=1 mise run sdk:go:smoke-release
+fi

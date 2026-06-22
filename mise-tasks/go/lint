@@ -5,5 +5,5 @@ set -euo pipefail
 mise run go:generate-bindings
 
 source "${MISE_PROJECT_ROOT}/scripts/tasks/go-env.sh"
-cd "${MISE_PROJECT_ROOT}/crates/go/go"
+cd "${MISE_PROJECT_ROOT}/crates/go"
 golangci-lint run ./...

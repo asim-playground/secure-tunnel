@@ -5,7 +5,7 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-package binding
+package securetunnel
 
 import (
 	"context"

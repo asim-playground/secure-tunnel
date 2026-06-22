@@ -2,6 +2,6 @@
 #MISE description="Clean Go binding artifacts"
 set -euo pipefail
 
-cd "${MISE_PROJECT_ROOT}/crates/go/go"
+cd "${MISE_PROJECT_ROOT}/crates/go"
 go clean ./...
 rm -f "${MISE_PROJECT_ROOT}/crates/go/binding.h"

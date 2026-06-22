@@ -123,6 +123,24 @@ mise run python:check-wheel
 mise run sdk:python-fastapi-smoke
 ```
 
+### Go SDK
+
+The native Go SDK is a cgo module under `crates/go`:
+
+```text
+github.com/asim-playground/secure-tunnel/crates/go
+```
+
+The release dry-run packages the module root with `binding.h`, `native.json`,
+and a host `secure_tunnel_ffi` dynamic library under
+`native/<goos>-<goarch>/`. The external-consumer smoke unpacks that artifact
+outside the monorepo and verifies compile, link, dynamic load, connect,
+account auth, request/response, and close:
+
+```bash
+mise run sdk:go:smoke-release
+```
+
 The public package keeps the historical descriptor helpers while adding the
 coarse SDK client/session operations shared with the generated Swift and Kotlin
 bindings.

@@ -15,7 +15,7 @@ The following package metadata must match it:
 - Flutter/Dart `bindings/flutter/pubspec.yaml` `version`.
 - Flutter bridge crate `bindings/flutter/rust/Cargo.toml` package and
   `secure-tunnel-*` dependency versions.
-- Native Go `crates/go/go/types.go` `Version`.
+- Native Go `crates/go/types.go` `Version`.
 
 SwiftPM path packages do not carry a package version in `Package.swift`; the
 Swift SDK version is the Git tag or release artifact version that matches the
@@ -96,8 +96,11 @@ Publication is out of scope for the dry-run task. Current distribution scope:
 - Python: wheel artifact in dry-run; PyPI publication is disabled until package
   ownership and token policy are approved.
 - Flutter/Dart: `publish_to: none` blocks pub.dev publication by default.
-- Go: internal source artifact only until task `00000033` approves the public
-  module path and native library distribution layout.
+- Go: dry-run source module bundle at
+  `github.com/asim-playground/secure-tunnel/crates/go`, packaged with
+  `native.json`, `binding.h`, and host `secure_tunnel_ffi` under
+  `native/<goos>-<goarch>/`. Consumers must use the documented native library
+  path or install equivalent checked artifacts before loading the cgo package.
 
 Rollback guidance: keep the previous release artifact manifest and checksums
 available, revert consumers to the previous version or tag, and avoid reusing a

@@ -5,11 +5,16 @@
 //
 // SPDX-License-Identifier: MPL-2.0
 
-// Package binding provides Go bindings for the Secure Tunnel C ABI.
-package binding
+// Package securetunnel provides Go bindings for the Secure Tunnel C ABI.
+package securetunnel
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/..
+#cgo CFLAGS: -I${SRCDIR}
+#cgo linux,amd64 LDFLAGS: -L${SRCDIR}/native/linux-amd64
+#cgo linux,arm64 LDFLAGS: -L${SRCDIR}/native/linux-arm64
+#cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/native/darwin-amd64
+#cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/native/darwin-arm64
+#cgo windows,amd64 LDFLAGS: -L${SRCDIR}/native/windows-amd64
 #cgo LDFLAGS: -lsecure_tunnel_ffi
 
 #include "binding.h"

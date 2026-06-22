@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import json
 import os
+import platform
 import re
 import shutil
 import stat
@@ -25,6 +26,7 @@ from typing import Any
 
 
 PACKAGE_NAMES = ("swift", "kotlin", "python", "flutter", "go")
+GO_MODULE_PATH = "github.com/asim-playground/secure-tunnel/crates/go"
 
 
 @dataclass(frozen=True)
@@ -84,7 +86,8 @@ def package_metadata(root: Path) -> dict[str, Any]:
     flutter_pubspec = simple_yaml_scalars(root / "bindings/flutter/pubspec.yaml")
     swift_text = read_text(root / "bindings/swift/Package.swift")
     go_mod = read_text(root / "crates/go/go.mod")
-    go_types = read_text(root / "crates/go/go/types.go")
+    go_types = read_text(root / "crates/go/types.go")
+    go_binding = read_text(root / "crates/go/binding.go")
 
     version = cargo["workspace"]["package"]["version"]
     return {
@@ -130,6 +133,7 @@ def package_metadata(root: Path) -> dict[str, Any]:
         },
         "go": {
             "module": regex_value(r"^module\s+(\S+)", go_mod, "Go module path"),
+            "package": regex_value(r"^package\s+(\S+)", go_binding, "Go package name"),
             "version": regex_value(r'const\s+Version\s+=\s+"([^"]+)"', go_types, "Go version"),
         },
     }
@@ -162,6 +166,8 @@ def validate_metadata(metadata: dict[str, Any]) -> list[str]:
         "flutter.bridge_crate_version": (metadata["flutter"]["bridge_crate_version"], version),
         "flutter.sdk_dependency_version": (metadata["flutter"]["sdk_dependency_version"], version),
         "flutter.core_dependency_version": (metadata["flutter"]["core_dependency_version"], version),
+        "go.module": (metadata["go"]["module"], GO_MODULE_PATH),
+        "go.package": (metadata["go"]["package"], "securetunnel"),
         "go.version": (metadata["go"]["version"], version),
     }
     for label, (actual, wanted) in expected.items():
@@ -233,6 +239,78 @@ def create_tar(
                     add_file_to_tar(tar, file_path, prefix / relative)
 
 
+def host_go_platform() -> str:
+    system = platform.system().lower()
+    machine = platform.machine().lower()
+    os_name = {
+        "darwin": "darwin",
+        "linux": "linux",
+        "windows": "windows",
+    }.get(system)
+    arch = {
+        "aarch64": "arm64",
+        "arm64": "arm64",
+        "amd64": "amd64",
+        "x86_64": "amd64",
+    }.get(machine)
+    if os_name is None or arch is None:
+        raise ValueError(f"unsupported Go native release host: {system}-{machine}")
+    return f"{os_name}-{arch}"
+
+
+def go_native_library_name(go_platform: str) -> str:
+    if go_platform.startswith("windows-"):
+        return "secure_tunnel_ffi.dll"
+    if go_platform.startswith("darwin-"):
+        return "libsecure_tunnel_ffi.dylib"
+    return "libsecure_tunnel_ffi.so"
+
+
+def stage_go_module(root: Path, version: str) -> tuple[Path, dict[str, Any]]:
+    go_platform = host_go_platform()
+    library_name = go_native_library_name(go_platform)
+    native_source = root / "target/release" / library_name
+    if not native_source.exists():
+        raise FileNotFoundError(f"missing Go native library: {native_source}")
+
+    module_root = root / "target/sdk-release/staging/secure_tunnel_go"
+    if module_root.exists():
+        shutil.rmtree(module_root)
+    module_root.mkdir(parents=True)
+    for path in sorted((root / "crates/go").glob("*.go")):
+        shutil.copy2(path, module_root / path.name)
+    for relative in ("go.mod", "binding.h", "README.md"):
+        shutil.copy2(root / "crates/go" / relative, module_root / relative)
+    shutil.copy2(root / "LICENSE", module_root / "LICENSE")
+
+    native_dir = module_root / "native" / go_platform
+    native_dir.mkdir(parents=True)
+    native_destination = native_dir / library_name
+    shutil.copy2(native_source, native_destination)
+
+    native_sha = sha256_file(native_destination)
+    metadata = {
+        "schema": "secure-tunnel-go-native-v1",
+        "module": GO_MODULE_PATH,
+        "package": "securetunnel",
+        "version": version,
+        "abi_version": "1",
+        "platforms": [
+            {
+                "goos_goarch": go_platform,
+                "library": f"native/{go_platform}/{library_name}",
+                "sha256": native_sha,
+                "size_bytes": native_destination.stat().st_size,
+            },
+        ],
+    }
+    (module_root / "native.json").write_text(
+        json.dumps(metadata, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return module_root, metadata
+
+
 def selected_packages(raw: str | None) -> list[str]:
     value = raw or os.environ.get("SECURE_TUNNEL_SDK_RELEASE_PACKAGES") or ",".join(PACKAGE_NAMES)
     packages = [item.strip() for item in value.split(",") if item.strip()]
@@ -257,7 +335,7 @@ def create_package_artifacts(root: Path, packages: list[str], version: str) -> l
             shutil.copy2(path, destination)
             artifacts.append(artifact(destination, "python", root))
 
-    tar_specs = {
+    tar_specs: dict[str, tuple[Path, list[tuple[Path, PurePosixPath]], set[str]]] = {
         "swift": (
             artifact_dir / f"SecureTunnel-{version}.tar",
             [(root / "target/sdk/swift/SecureTunnel", PurePosixPath("SecureTunnel"))],
@@ -281,17 +359,19 @@ def create_package_artifacts(root: Path, packages: list[str], version: str) -> l
                 "target",
             },
         ),
-        "go": (
-            artifact_dir / f"secure_tunnel_go-{version}.tar",
-            [
-                (root / "crates/go/go", PurePosixPath("secure_tunnel_go/go")),
-                (root / "crates/go/binding.h", PurePosixPath("secure_tunnel_go/binding.h")),
-                (root / "crates/go/module.modulemap", PurePosixPath("secure_tunnel_go/module.modulemap")),
-                (root / "crates/go/README.md", PurePosixPath("secure_tunnel_go/README.md")),
-            ],
-            set(),
-        ),
     }
+    if "go" in packages:
+        go_module, go_native = stage_go_module(root, version)
+        (artifact_dir / f"secure_tunnel_go-{version}.native.json").write_text(
+            json.dumps(go_native, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        artifacts.append(artifact(artifact_dir / f"secure_tunnel_go-{version}.native.json", "go", root))
+        tar_specs["go"] = (
+            artifact_dir / f"secure_tunnel_go-{version}.tar",
+            [(go_module, PurePosixPath("secure_tunnel_go"))],
+            set(),
+        )
     for package in packages:
         if package == "python":
             continue

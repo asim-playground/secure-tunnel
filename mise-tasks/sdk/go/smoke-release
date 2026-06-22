@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+#MISE description="Run an external-consumer smoke through the Go release artifact"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+# shellcheck disable=SC1091
+# shellcheck source=../smoke-common.sh
+source mise-tasks/sdk/smoke-common.sh
+# shellcheck disable=SC1091
+# shellcheck source=common.sh
+source mise-tasks/sdk/go/common.sh
+
+if [[ "${SECURE_TUNNEL_GO_RELEASE_SKIP_MANIFEST:-0}" != "1" ]]; then
+	mise run sdk:go
+	cargo build -p secure-tunnel-ffi --lib --release
+	SECURE_TUNNEL_SDK_RELEASE_PACKAGES=go mise run sdk:release:manifest
+fi
+
+archive="$(go_sdk_release_archive_path)"
+test -f "${archive}" || {
+	echo "missing Go release artifact: ${archive}" >&2
+	exit 1
+}
+
+tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/secure-tunnel-go-release.XXXXXX")"
+fixture_json="$(mktemp "${TMPDIR:-/tmp}/secure-tunnel-go-release-fixture.XXXXXX.json")"
+trap 'stop_secure_tunnel_fixture; rm -rf "${tmp_dir}"; rm -f "${fixture_json}"' EXIT
+
+tar -xf "${archive}" -C "${tmp_dir}"
+module_root="${tmp_dir}/secure_tunnel_go"
+consumer_root="${tmp_dir}/consumer"
+native_platform="$(go_sdk_native_platform)"
+native_dir="${module_root}/native/${native_platform}"
+module_path="$(go_sdk_module_path)"
+
+for file in go.mod binding.go config.go types.go binding.h native.json "native/${native_platform}"; do
+	test -e "${module_root}/${file}" || {
+		echo "Go release artifact missing ${file}" >&2
+		exit 1
+	}
+done
+
+mkdir -p "${consumer_root}"
+cat >"${consumer_root}/go.mod" <<GO
+module secure_tunnel_go_release_consumer
+
+go 1.26
+
+require ${module_path} v0.0.0
+
+replace ${module_path} => ${module_root}
+GO
+cat >"${consumer_root}/release_smoke_test.go" <<'GO'
+package consumer
+
+import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"os"
+	"testing"
+
+	securetunnel "github.com/asim-playground/secure-tunnel/crates/go"
+)
+
+type fixture struct {
+	DescriptorJSON                   string   `json:"descriptor_json"`
+	OuterRootCertificatesDERB64      []string `json:"outer_root_certificates_der_b64"`
+	PinnedServiceStaticPublicKeysB64 []string `json:"pinned_service_static_public_keys_b64"`
+	NowUnixSeconds                   uint64   `json:"now_unix_seconds"`
+	SmokePingB64                     string   `json:"smoke_ping_b64"`
+	SmokePongB64                     string   `json:"smoke_pong_b64"`
+}
+
+func TestReleaseArtifactConsumerSession(t *testing.T) {
+	path := os.Getenv("SECURE_TUNNEL_GO_FIXTURE_JSON")
+	if path == "" {
+		t.Fatal("SECURE_TUNNEL_GO_FIXTURE_JSON is not set")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	var fx fixture
+	if err := json.Unmarshal(data, &fx); err != nil {
+		t.Fatalf("decode fixture: %v", err)
+	}
+	ctx := context.Background()
+	defaults, err := securetunnel.DefaultClientConfig(ctx)
+	if err != nil {
+		t.Fatalf("DefaultClientConfig() error = %v", err)
+	}
+	config := securetunnel.ClientConfig{
+		TransportPolicy: defaults.TransportPolicy,
+		OuterRootCertificatesDER: decodeMany(t, fx.OuterRootCertificatesDERB64),
+		DescriptorTrustAnchors: defaults.DescriptorTrustAnchors,
+		PinnedServiceStaticPublicKeys: decodeMany(t, fx.PinnedServiceStaticPublicKeysB64),
+	}
+	client, err := securetunnel.NewClient(ctx, config)
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+	defer client.Close()
+	connection, err := client.Connect(ctx, securetunnel.ConnectOptions{
+		DescriptorJSON: fx.DescriptorJSON,
+		NowUnixSeconds: fx.NowUnixSeconds,
+	})
+	if err != nil {
+		t.Fatalf("Connect() error = %v", err)
+	}
+	defer connection.Close()
+	report, err := connection.Report()
+	if err != nil {
+		t.Fatalf("Report() error = %v", err)
+	}
+	if report.SelectedCarrier != securetunnel.CarrierQuic {
+		t.Fatalf("selected carrier = %q, want quic", report.SelectedCarrier)
+	}
+	auth, err := connection.AuthenticateAccount(ctx, securetunnel.AccountAuthRequest{
+		AccountID: "go-release-smoke",
+		CredentialPayload: []byte("credential"),
+		Mode: securetunnel.AccountAuthModeFresh,
+	})
+	if err != nil {
+		t.Fatalf("AuthenticateAccount() error = %v", err)
+	}
+	if auth.AccountID != "go-release-smoke" {
+		t.Fatalf("account id = %q, want go-release-smoke", auth.AccountID)
+	}
+	response, err := connection.Request(ctx, decodeOne(t, fx.SmokePingB64))
+	if err != nil {
+		t.Fatalf("Request() error = %v", err)
+	}
+	if string(response) != string(decodeOne(t, fx.SmokePongB64)) {
+		t.Fatal("unexpected smoke response")
+	}
+	closeReport, err := connection.CloseSession(ctx, 1000, true)
+	if err != nil {
+		t.Fatalf("CloseSession() error = %v", err)
+	}
+	if closeReport.Classification != "graceful" {
+		t.Fatalf("close classification = %q, want graceful", closeReport.Classification)
+	}
+}
+
+func decodeMany(t *testing.T, values []string) [][]byte {
+	t.Helper()
+	decoded := make([][]byte, 0, len(values))
+	for _, value := range values {
+		decoded = append(decoded, decodeOne(t, value))
+	}
+	return decoded
+}
+
+func decodeOne(t *testing.T, value string) []byte {
+	t.Helper()
+	decoded, err := base64.StdEncoding.DecodeString(value)
+	if err != nil {
+		t.Fatalf("decode base64 fixture: %v", err)
+	}
+	return decoded
+}
+GO
+
+start_secure_tunnel_fixture "${fixture_json}"
+(
+	cd "${consumer_root}"
+	case "$(uname -s)" in
+		Darwin)
+			export DYLD_LIBRARY_PATH="${native_dir}:${DYLD_LIBRARY_PATH:-}"
+			;;
+		Linux)
+			export LD_LIBRARY_PATH="${native_dir}:${LD_LIBRARY_PATH:-}"
+			;;
+		CYGWIN* | MINGW* | MSYS*)
+			export PATH="${native_dir}:${PATH}"
+			;;
+	esac
+	SECURE_TUNNEL_GO_FIXTURE_JSON="${fixture_json}" go test ./...
+)

@@ -6,5 +6,5 @@ mise run go:generate-bindings
 mise run rust:build
 
 source "${MISE_PROJECT_ROOT}/scripts/tasks/go-env.sh"
-cd "${MISE_PROJECT_ROOT}/crates/go/go"
+cd "${MISE_PROJECT_ROOT}/crates/go"
 go build ./...
