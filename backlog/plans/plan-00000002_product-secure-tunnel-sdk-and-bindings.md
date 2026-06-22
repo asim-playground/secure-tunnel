@@ -353,7 +353,7 @@ Rust facade and behavior.
 | task-`00000030` | `build python fastapi server and rust client e2e` | `Phase 4` | `task-00000023, task-00000026` | `completed` |
 | task-`00000028` | `package flutter dart sdk using rust facade` | `Phase 5` | `task-00000018, task-00000021, task-00000022, task-00000024` | `completed` |
 | task-`00000029` | `package go sdk over stable c abi` | `Phase 5` | `task-00000016, task-00000018, task-00000021, task-00000022, task-00000024` | `completed` |
-| task-`00000032` | `harden go sdk cache and failure reporting` | `Phase 6` | `task-00000029` | `proposed` |
+| task-`00000032` | `harden go sdk cache and failure reporting` | `Phase 6` | `task-00000029` | `completed` |
 | task-`00000027` | `add sdk release ci and versioning` | `Phase 6` | `task-00000022, task-00000024, task-00000025, task-00000026, task-00000028, task-00000029, task-00000032` | `proposed` |
 
 ## Validation Strategy
@@ -420,13 +420,10 @@ Rust facade and behavior.
 
 ## Immediate Next Actions
 
-1. Start `task-00000032` to close Go cache-specific and structured
-   failed-connect reporting hardening before release packaging.
+1. Start `task-00000027`, so release packaging can archive all supported SDK
+   artifacts and fail stale generated/package metadata.
 2. Keep `task-00000013` and `task-00000014` queued for managed-network support
    before declaring the SDK broadly production-ready.
-3. Start `task-00000027` after `task-00000032`, so release packaging can
-   archive all supported SDK artifacts and fail stale generated/package
-   metadata.
 
 ## Implementation Notes
 
@@ -526,6 +523,9 @@ Rust facade and behavior.
 - `2026-06-22`: Added `task-00000032` for residual Go SDK release hardening:
   cache-specific Go regression coverage and structured failed-connect attempt
   reporting before release CI.
+- `2026-06-22`: Completed `task-00000032` with a v2 Go connect ABI preserving
+  the existing C result shape, structured Go `ConnectError` attempts,
+  cached-fallback fixture coverage, and independent review closure.
 
 ## Completion Checklist
 
@@ -558,3 +558,4 @@ Rust facade and behavior.
 - `2026-06-21` `Added task 00000031 for timeout/cancellation security hardening, STRIDE review, stalled-peer regressions, and cargo-mutants automation.`
 - `2026-06-21` `Completed task 00000031 after independent review and re-review; final validation included mise run dev, security:test, sdk:check-bindings, cargo-mutants list, and cargo-mutants smoke.`
 - `2026-06-22` `Completed task 00000028 and task 00000029, moved the plan to Phase 6 release work, and added task 00000032 for residual Go SDK cache/error hardening before release CI.`
+- `2026-06-22` `Completed task 00000032 and made task 00000027 the next Phase 6 release action.`

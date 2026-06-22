@@ -165,7 +165,7 @@ func (c *Client) Connect(ctx context.Context, options ConnectOptions) (*Connecti
 		cCacheJSON = C.CString(string(cacheJSON))
 		defer C.free(unsafe.Pointer(cCacheJSON))
 	}
-	result := C.secure_tunnel_client_connect(
+	result := C.secure_tunnel_client_connect_v2(
 		c.ptr,
 		cJSON,
 		C.uint64_t(options.NowUnixSeconds),
@@ -174,8 +174,11 @@ func (c *Client) Connect(ctx context.Context, options ConnectOptions) (*Connecti
 	if result.error != nil {
 		defer C.secure_tunnel_free_string(result.error)
 	}
+	if result.error_details_json != nil {
+		defer C.secure_tunnel_free_string(result.error_details_json)
+	}
 	if status := int32(result.status); status != 0 {
-		return nil, &ABIError{Status: status, msg: cStringOrDefault(result.error)}
+		return nil, connectResultError(status, result)
 	}
 	connection := &Connection{ptr: result.connection}
 	runtime.SetFinalizer(connection, (*Connection).Close)
@@ -414,4 +417,20 @@ func unwrapStringResult(result C.SecureTunnelStringResult) (string, error) {
 	}
 
 	return value, nil
+}
+
+func connectResultError(status int32, result C.SecureTunnelConnectionResultV2) error {
+	message := cStringOrDefault(result.error)
+	if result.error_details_json == nil {
+		return &ABIError{Status: status, msg: message}
+	}
+	var connectErr ConnectError
+	if err := json.Unmarshal([]byte(C.GoString(result.error_details_json)), &connectErr); err != nil {
+		return &ABIError{Status: status, msg: message}
+	}
+	connectErr.Status = status
+	if connectErr.Message == "" {
+		connectErr.Message = message
+	}
+	return &connectErr
 }

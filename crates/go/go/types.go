@@ -25,6 +25,21 @@ func (e *ABIError) Error() string {
 	return fmt.Sprintf("secure tunnel ABI status %d: %s", e.Status, e.msg)
 }
 
+// ConnectError represents a failed connect with structured SDK details.
+type ConnectError struct {
+	Status   int32                    `json:"-"`
+	Kind     string                   `json:"kind"`
+	Message  string                   `json:"message"`
+	Attempts []TransportAttemptReport `json:"attempts"`
+}
+
+func (e *ConnectError) Error() string {
+	if e.Kind == "" {
+		return fmt.Sprintf("secure tunnel connect status %d: %s", e.Status, e.Message)
+	}
+	return fmt.Sprintf("secure tunnel connect %s: %s", e.Kind, e.Message)
+}
+
 // TransportPolicyConfig controls carrier selection and operation budgets.
 type TransportPolicyConfig struct {
 	QuicReprobeDelaySeconds uint64 `json:"quic_reprobe_delay_seconds"`
@@ -104,11 +119,80 @@ type TransportCacheSnapshot struct {
 	HighestDescriptorSerial       *uint64         `json:"highest_descriptor_serial"`
 }
 
-// TransportAttemptReport records one carrier attempt for observability.
-type TransportAttemptReport struct {
+type transportAttemptReportJSON struct {
 	Carrier Carrier         `json:"carrier"`
 	Source  CandidateSource `json:"source"`
 	Outcome json.RawMessage `json:"outcome"`
+}
+
+// TransportAttemptOutcome is a terminal attempt result.
+type TransportAttemptOutcome string
+
+const (
+	TransportAttemptOutcomeSecureReady TransportAttemptOutcome = "secure_ready"
+	TransportAttemptOutcomeFallback    TransportAttemptOutcome = "fallback"
+	TransportAttemptOutcomeFailed      TransportAttemptOutcome = "failed"
+)
+
+// TransportAttemptReport records one carrier attempt for observability.
+type TransportAttemptReport struct {
+	Carrier        Carrier                 `json:"carrier"`
+	Source         CandidateSource         `json:"source"`
+	Outcome        TransportAttemptOutcome `json:"outcome"`
+	FallbackReason *FallbackReason         `json:"fallback_reason,omitempty"`
+	FailureKind    *string                 `json:"failure_kind,omitempty"`
+	FailureMessage *string                 `json:"failure_message,omitempty"`
+}
+
+func (r *TransportAttemptReport) UnmarshalJSON(data []byte) error {
+	var value transportAttemptReportJSON
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	r.Carrier = value.Carrier
+	r.Source = value.Source
+	return r.decodeOutcome(value.Outcome)
+}
+
+func (r *TransportAttemptReport) decodeOutcome(data json.RawMessage) error {
+	var unit string
+	if err := json.Unmarshal(data, &unit); err == nil {
+		r.Outcome = TransportAttemptOutcome(unit)
+		return nil
+	}
+	var tagged map[string]json.RawMessage
+	if err := json.Unmarshal(data, &tagged); err != nil {
+		return err
+	}
+	if _, ok := tagged[string(TransportAttemptOutcomeSecureReady)]; ok {
+		r.Outcome = TransportAttemptOutcomeSecureReady
+		return nil
+	}
+	if payload, ok := tagged[string(TransportAttemptOutcomeFallback)]; ok {
+		var fallback struct {
+			Reason FallbackReason `json:"reason"`
+		}
+		if err := json.Unmarshal(payload, &fallback); err != nil {
+			return err
+		}
+		r.Outcome = TransportAttemptOutcomeFallback
+		r.FallbackReason = &fallback.Reason
+		return nil
+	}
+	if payload, ok := tagged[string(TransportAttemptOutcomeFailed)]; ok {
+		var failed struct {
+			Kind    string `json:"kind"`
+			Message string `json:"message"`
+		}
+		if err := json.Unmarshal(payload, &failed); err != nil {
+			return err
+		}
+		r.Outcome = TransportAttemptOutcomeFailed
+		r.FailureKind = &failed.Kind
+		r.FailureMessage = &failed.Message
+		return nil
+	}
+	return fmt.Errorf("unknown transport attempt outcome: %s", string(data))
 }
 
 // ConnectReport is the JSON-friendly SDK connect report.

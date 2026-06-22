@@ -294,6 +294,80 @@ func TestBindingFixtureSmoke(t *testing.T) {
 	if report.TransportCache.HighestDescriptorSerial == nil {
 		t.Fatal("transport cache missing highest descriptor serial")
 	}
+	if report.Attempts[0].Outcome != TransportAttemptOutcomeSecureReady {
+		t.Fatalf("first attempt outcome = %q, want secure_ready", report.Attempts[0].Outcome)
+	}
+	reason := FallbackReasonOuterPathFailure
+	nextProbe := fixture.NowUnixSeconds + 300
+	cachedConnection, err := client.Connect(ctx, ConnectOptions{
+		DescriptorJSON: fixture.DescriptorJSON,
+		NowUnixSeconds: fixture.NowUnixSeconds,
+		TransportCache: &TransportCacheSnapshot{
+			LastQuicFailure:               &reason,
+			NextQuicProbeAfterUnixSeconds: &nextProbe,
+			HighestDescriptorSerial:       report.TransportCache.HighestDescriptorSerial,
+		},
+	})
+	if err != nil {
+		t.Fatalf("cached Connect() error = %v", err)
+	}
+	defer cachedConnection.Close()
+	cachedReport, err := cachedConnection.Report()
+	if err != nil {
+		t.Fatalf("cached Report() error = %v", err)
+	}
+	if cachedReport.SelectedCarrier != CarrierWSS {
+		t.Fatalf("cached selected carrier = %q, want wss", cachedReport.SelectedCarrier)
+	}
+	if cachedReport.CacheState != CacheDispositionCachedFallback {
+		t.Fatalf("cached cache state = %q, want cached_fallback", cachedReport.CacheState)
+	}
+	if len(cachedReport.Attempts) != 1 {
+		t.Fatalf("cached attempts = %d, want 1", len(cachedReport.Attempts))
+	}
+	if cachedReport.Attempts[0].Source != CandidateSourceCachedQuicBadNetwork {
+		t.Fatalf("cached attempt source = %q, want cached_quic_bad_network", cachedReport.Attempts[0].Source)
+	}
+	if cachedReport.Attempts[0].Outcome != TransportAttemptOutcomeSecureReady {
+		t.Fatalf("cached attempt outcome = %q, want secure_ready", cachedReport.Attempts[0].Outcome)
+	}
+	badRootConfig := ClientConfig{
+		TransportPolicy:               defaults.TransportPolicy,
+		DescriptorTrustAnchors:        defaults.DescriptorTrustAnchors,
+		PinnedServiceStaticPublicKeys: config.PinnedServiceStaticPublicKeys,
+	}
+	badRootClient, err := NewClient(ctx, badRootConfig)
+	if err != nil {
+		t.Fatalf("NewClient(bad root config) error = %v", err)
+	}
+	defer badRootClient.Close()
+	_, err = badRootClient.Connect(ctx, ConnectOptions{
+		DescriptorJSON: fixture.DescriptorJSON,
+		NowUnixSeconds: fixture.NowUnixSeconds,
+	})
+	if err == nil {
+		t.Fatal("expected missing local roots to fail connect")
+	}
+	var connectErr *ConnectError
+	if !errors.As(err, &connectErr) {
+		t.Fatalf("expected ConnectError, got %T: %v", err, err)
+	}
+	if connectErr.Status != 8 {
+		t.Fatalf("ConnectError status = %d, want 8", connectErr.Status)
+	}
+	if connectErr.Kind == "" || connectErr.Message == "" {
+		t.Fatalf("ConnectError missing kind/message: %#v", connectErr)
+	}
+	if len(connectErr.Attempts) == 0 {
+		t.Fatal("ConnectError missing attempts")
+	}
+	if connectErr.Attempts[0].Outcome == "" {
+		t.Fatalf("ConnectError first attempt missing outcome: %#v", connectErr.Attempts[0])
+	}
+	if connectErr.Attempts[0].Outcome == TransportAttemptOutcomeFailed &&
+		(connectErr.Attempts[0].FailureKind == nil || connectErr.Attempts[0].FailureMessage == nil) {
+		t.Fatalf("failed attempt missing failure details: %#v", connectErr.Attempts[0])
+	}
 	artifacts, err := connection.SecurityArtifacts()
 	if err != nil {
 		t.Fatalf("SecurityArtifacts() error = %v", err)

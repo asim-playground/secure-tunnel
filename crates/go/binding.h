@@ -135,6 +135,28 @@ typedef struct SecureTunnelConnectionResult {
 } SecureTunnelConnectionResult;
 
 /**
+ * Result for C ABI v2 connect calls that can return structured errors.
+ */
+typedef struct SecureTunnelConnectionResultV2 {
+    /**
+     * Operation status.
+     */
+    enum SecureTunnelStatus status;
+    /**
+     * Caller-owned error message when status is not success.
+     */
+    char *error;
+    /**
+     * Caller-owned structured connect error JSON when available.
+     */
+    char *error_details_json;
+    /**
+     * Caller-owned connection handle when status is success.
+     */
+    struct SecureTunnelConnectionHandle *connection;
+} SecureTunnelConnectionResultV2;
+
+/**
  * Caller-owned byte buffer returned by the C ABI.
  */
 typedef struct SecureTunnelByteBuffer {
@@ -251,6 +273,19 @@ struct SecureTunnelConnectionResult secure_tunnel_client_connect(struct SecureTu
                                                                  const char *descriptor_json,
                                                                  uint64_t now_unix_seconds,
                                                                  const char *transport_cache_json);
+
+/**
+ * Connects a client to a service descriptor and returns structured failures.
+ *
+ * # Safety
+ *
+ * `client` must be a handle returned by `secure_tunnel_client_new`.
+ * `descriptor_json` must be a valid pointer to a null-terminated C string.
+ */
+struct SecureTunnelConnectionResultV2 secure_tunnel_client_connect_v2(struct SecureTunnelClientHandle *client,
+                                                                      const char *descriptor_json,
+                                                                      uint64_t now_unix_seconds,
+                                                                      const char *transport_cache_json);
 
 /**
  * Returns the connection report as JSON.

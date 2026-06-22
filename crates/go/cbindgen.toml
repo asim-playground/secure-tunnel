@@ -25,6 +25,7 @@ include = [
     "SecureTunnelClientResult",
     "SecureTunnelConnectionHandle",
     "SecureTunnelConnectionResult",
+    "SecureTunnelConnectionResultV2",
     "SecureTunnelStatus",
     "SecureTunnelStringResult",
 ]

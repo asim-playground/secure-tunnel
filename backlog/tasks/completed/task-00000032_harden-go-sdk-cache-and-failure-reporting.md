@@ -33,20 +33,20 @@ attempt traces are not exposed as structured Go error data.
 
 ### A) Go transport cache behavior is proven
 
-- [ ] Add a Go package smoke or fixture test that passes a non-nil
+- [x] Add a Go package smoke or fixture test that passes a non-nil
       `ConnectOptions.TransportCache`.
-- [ ] Prove cached QUIC-bad posture selects the expected fallback/reprobe path
+- [x] Prove cached QUIC-bad posture selects the expected fallback/reprobe path
       without changing Rust SDK semantics.
-- [ ] Keep the test aligned with the same binding fixture semantics used by
+- [x] Keep the test aligned with the same binding fixture semantics used by
       Swift, Kotlin, Python, Flutter/Dart, and Rust-client smokes.
 
 ### B) Failed connect attempts are structured for Go callers
 
-- [ ] Expose failed-connect attempt traces to Go callers as typed data rather
+- [x] Expose failed-connect attempt traces to Go callers as typed data rather
       than only flattened `ABIError` text.
-- [ ] Preserve stable SDK error kind/message information without leaking
+- [x] Preserve stable SDK error kind/message information without leaking
       sensitive diagnostics into routine logs.
-- [ ] Add Go tests for at least one failed-connect path that includes attempt
+- [x] Add Go tests for at least one failed-connect path that includes attempt
       trace data.
 
 ## Cross-Repo Boundaries
@@ -82,24 +82,53 @@ attempt traces are not exposed as structured Go error data.
 
 ## Implementation Notes
 
-- [ ] Implementation notes added with command evidence.
+- [x] Implementation notes added with command evidence.
 - Created from the residual low-risk findings in the Task `00000029`
   independent re-review.
+- Added a v2 connect ABI instead of changing the existing result struct in
+  place: `secure_tunnel_client_connect_v2` returns
+  `SecureTunnelConnectionResultV2` with caller-owned `error_details_json`.
+  The existing `secure_tunnel_client_connect` remains as the legacy flattened
+  result and frees/discards v2 details before returning.
+- Added `ConnectError` to the Go package with `Status`, `Kind`, `Message`, and
+  typed `Attempts`, while keeping `ABIError` for non-connect ABI failures.
+- Added Go transport attempt decoding that flattens Rust serde enum outcomes
+  into `Outcome`, `FallbackReason`, `FailureKind`, and `FailureMessage`.
+- Extended the binding fixture smoke to pass a non-nil
+  `ConnectOptions.TransportCache` with active QUIC-bad posture and assert WSS
+  cached fallback through the same local fixture used by other SDK smokes.
+- Added a failed-connect fixture path that omits local root certificates,
+  verifies `errors.As(err, *ConnectError)`, and checks structured attempts.
+- Validation evidence:
+  - `cargo check -p secure-tunnel-ffi` passed.
+  - `mise run sdk:go` passed, including header drift, `go test ./...`,
+    `go test -race ./...`, and fixture smoke.
+  - `mise run dev` passed: Rust nextest 95/95, Python tests and smokes,
+    Go tests, lint, and formatting.
 
 ## Implementation Plan
 
-1. Add a cached-fallback Go fixture scenario using a non-nil
+1. [x] Add a cached-fallback Go fixture scenario using a non-nil
    `ConnectOptions.TransportCache`.
-2. Extend the C ABI and Go wrapper as needed to carry structured failed-connect
+2. [x] Extend the C ABI and Go wrapper as needed to carry structured failed-connect
    attempts.
-3. Add Go tests for structured failed-connect errors and keep header drift
+3. [x] Add Go tests for structured failed-connect errors and keep header drift
    checks current.
-4. Run `mise run sdk:go`, `mise run dev`, and independent review.
+4. [x] Run `mise run sdk:go`, `mise run dev`, and independent review.
 
 ## Review Notes
 
+- Read-only explorer recommended a v2 connect ABI so structured error details
+  would not mutate the existing C result struct; implementation followed that
+  recommendation.
+- Independent reviewer found no high or medium findings.
+- Residual low risk: exact spelling of `ConnectError.Kind` is currently aligned
+  with the existing UniFFI `Debug`-style error kind spelling, while attempt
+  failure kinds come from serde JSON. This is tracked in `task-00000027`
+  under release compatibility policy.
+
 ## Acceptance Closure
 
-- [ ] All acceptance criteria are satisfied and marked.
-- [ ] Verification commands and outcomes are recorded.
-- [ ] No unresolved high/medium findings remain.
+- [x] All acceptance criteria are satisfied and marked.
+- [x] Verification commands and outcomes are recorded.
+- [x] No unresolved high/medium findings remain.

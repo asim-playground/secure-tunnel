@@ -11,7 +11,7 @@ use crate::{SecureTunnelStatus, SecureTunnelStringResult, error_string};
 
 use super::{
     SecureTunnelByteBuffer, SecureTunnelBytesResult, SecureTunnelClientResult,
-    SecureTunnelConnectionResult,
+    SecureTunnelConnectionResultV2,
 };
 
 pub(super) fn bytes_from_ptr(
@@ -67,13 +67,28 @@ pub(super) fn client_error(
     }
 }
 
-pub(super) fn connection_error(
+pub(super) fn connection_error_v2(
     status: SecureTunnelStatus,
     error: impl Into<String>,
-) -> SecureTunnelConnectionResult {
-    SecureTunnelConnectionResult {
+) -> SecureTunnelConnectionResultV2 {
+    SecureTunnelConnectionResultV2 {
         status,
         error: error_string(error),
+        error_details_json: std::ptr::null_mut(),
+        connection: std::ptr::null_mut(),
+    }
+}
+
+pub(super) fn connection_error_with_details_v2(
+    status: SecureTunnelStatus,
+    error: impl Into<String>,
+    details: impl serde::Serialize,
+) -> SecureTunnelConnectionResultV2 {
+    SecureTunnelConnectionResultV2 {
+        status,
+        error: error_string(error),
+        error_details_json: serde_json::to_string(&details)
+            .map_or(std::ptr::null_mut(), error_string),
         connection: std::ptr::null_mut(),
     }
 }

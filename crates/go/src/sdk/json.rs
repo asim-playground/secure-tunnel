@@ -41,6 +41,31 @@ pub(super) struct GoAccountAuthReportJson {
     freshness: secure_tunnel_sdk::AccountFreshness,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub(super) struct GoConnectErrorJson {
+    kind: String,
+    message: String,
+    attempts: Vec<secure_tunnel_sdk::TransportAttemptReport>,
+}
+
+impl GoConnectErrorJson {
+    pub(super) fn from_sdk_error(value: &secure_tunnel_sdk::SdkError) -> Self {
+        Self {
+            kind: format!("{:?}", value.kind()),
+            message: value.message(),
+            attempts: Vec::new(),
+        }
+    }
+
+    pub(super) fn from_connect_error(value: &secure_tunnel_sdk::ConnectError) -> Self {
+        Self {
+            kind: format!("{:?}", value.kind()),
+            message: value.message(),
+            attempts: value.attempts.clone(),
+        }
+    }
+}
+
 impl GoClientConfigJson {
     pub(super) fn from_sdk_default() -> Self {
         let config = secure_tunnel_sdk::ClientConfig::default();

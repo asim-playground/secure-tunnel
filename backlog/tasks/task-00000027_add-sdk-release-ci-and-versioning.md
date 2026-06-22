@@ -39,6 +39,8 @@ together.
       facade and native package releases.
 - [ ] Define compatibility policy for generated SDK APIs while UniFFI remains
       pre-1.0.
+- [ ] Define stable SDK error-kind spelling across generated SDKs and native
+      Go, including `ConnectError.Kind` and per-attempt failure kinds.
 - [ ] Add checks that fail when generated bindings or package metadata are
       stale relative to the Rust facade.
 
@@ -74,10 +76,11 @@ together.
 
 - backlog/tasks/completed/task-00000022_add-observability-and-conformance-test-matrix.md
 - backlog/tasks/completed/task-00000024_package-swift-sdk-as-swiftpm-and-xcframework.md
-- backlog/tasks/task-00000025_package-kotlin-sdk-as-jvm-or-android-artifact.md
+- backlog/tasks/completed/task-00000025_package-kotlin-sdk-as-jvm-or-android-artifact.md
 - backlog/tasks/completed/task-00000026_package-python-sdk-from-the-shared-rust-facade.md
-- backlog/tasks/task-00000028_package-flutter-dart-sdk-using-rust-facade.md
-- backlog/tasks/task-00000029_package-go-sdk-over-stable-c-abi.md
+- backlog/tasks/completed/task-00000028_package-flutter-dart-sdk-using-rust-facade.md
+- backlog/tasks/completed/task-00000029_package-go-sdk-over-stable-c-abi.md
+- backlog/tasks/completed/task-00000032_harden-go-sdk-cache-and-failure-reporting.md
 - backlog/plans/plan-00000002_product-secure-tunnel-sdk-and-bindings.md
 
 ## Reference Tasks

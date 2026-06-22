@@ -12,11 +12,12 @@ mod json;
 mod result;
 
 use self::json::{
-    GoAccountAuthReportJson, GoClientConfigJson, GoSecureChannelArtifactsJson, decode_config,
-    decode_transport_cache_json, encode_json_string,
+    GoAccountAuthReportJson, GoClientConfigJson, GoConnectErrorJson, GoSecureChannelArtifactsJson,
+    decode_config, decode_transport_cache_json, encode_json_string,
 };
 use self::result::{
-    bytes_error, bytes_from_ptr, bytes_success, client_error, connection_error, take_result_message,
+    bytes_error, bytes_from_ptr, bytes_success, client_error, connection_error_v2,
+    connection_error_with_details_v2, take_result_message,
 };
 
 use crate::{SecureTunnelStatus, SecureTunnelStringResult, c_string_to_string};
@@ -63,6 +64,20 @@ pub struct SecureTunnelConnectionResult {
     pub status: SecureTunnelStatus,
     /// Caller-owned error message when status is not success.
     pub error: *mut c_char,
+    /// Caller-owned connection handle when status is success.
+    pub connection: *mut SecureTunnelConnectionHandle,
+}
+
+/// Result for C ABI v2 connect calls that can return structured errors.
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct SecureTunnelConnectionResultV2 {
+    /// Operation status.
+    pub status: SecureTunnelStatus,
+    /// Caller-owned error message when status is not success.
+    pub error: *mut c_char,
+    /// Caller-owned structured connect error JSON when available.
+    pub error_details_json: *mut c_char,
     /// Caller-owned connection handle when status is success.
     pub connection: *mut SecureTunnelConnectionHandle,
 }
@@ -156,22 +171,56 @@ pub unsafe extern "C" fn secure_tunnel_client_connect(
     now_unix_seconds: u64,
     transport_cache_json: *const c_char,
 ) -> SecureTunnelConnectionResult {
+    let result = unsafe {
+        secure_tunnel_client_connect_v2(
+            client,
+            descriptor_json,
+            now_unix_seconds,
+            transport_cache_json,
+        )
+    };
+    if !result.error_details_json.is_null() {
+        unsafe {
+            crate::secure_tunnel_free_string(result.error_details_json);
+        }
+    }
+    SecureTunnelConnectionResult {
+        status: result.status,
+        error: result.error,
+        connection: result.connection,
+    }
+}
+
+/// Connects a client to a service descriptor and returns structured failures.
+///
+/// # Safety
+///
+/// `client` must be a handle returned by `secure_tunnel_client_new`.
+/// `descriptor_json` must be a valid pointer to a null-terminated C string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn secure_tunnel_client_connect_v2(
+    client: *mut SecureTunnelClientHandle,
+    descriptor_json: *const c_char,
+    now_unix_seconds: u64,
+    transport_cache_json: *const c_char,
+) -> SecureTunnelConnectionResultV2 {
     let Some(client) = (unsafe { client.as_ref() }) else {
-        return connection_error(
+        return connection_error_v2(
             SecureTunnelStatus::SecureTunnelStatusNullPointer,
             "client must not be null",
         );
     };
     let descriptor_json = match unsafe { c_string_to_string(descriptor_json, "descriptor_json") } {
         Ok(value) => value,
-        Err(error) => return connection_error(error.status, take_result_message(error)),
+        Err(error) => return connection_error_v2(error.status, take_result_message(error)),
     };
     let descriptor = match secure_tunnel_sdk::BootstrapDescriptor::from_json(&descriptor_json) {
         Ok(descriptor) => descriptor,
         Err(error) => {
-            return connection_error(
+            return connection_error_with_details_v2(
                 SecureTunnelStatus::SecureTunnelStatusInvalidDescriptor,
-                error.to_string(),
+                error.message(),
+                GoConnectErrorJson::from_sdk_error(&error),
             );
         }
     };
@@ -180,12 +229,12 @@ pub unsafe extern "C" fn secure_tunnel_client_connect(
     } else {
         match unsafe { c_string_to_string(transport_cache_json, "transport_cache_json") } {
             Ok(value) => Some(value),
-            Err(error) => return connection_error(error.status, take_result_message(error)),
+            Err(error) => return connection_error_v2(error.status, take_result_message(error)),
         }
     };
     let transport_cache = match decode_transport_cache_json(transport_cache_json) {
         Ok(value) => value,
-        Err(error) => return connection_error(error.status, take_result_message(error)),
+        Err(error) => return connection_error_v2(error.status, take_result_message(error)),
     };
     let mut options = secure_tunnel_sdk::ConnectOptions::new(descriptor, now_unix_seconds);
     if let Some(transport_cache) = transport_cache {
@@ -195,9 +244,10 @@ pub unsafe extern "C" fn secure_tunnel_client_connect(
     let outcome = match outcome {
         Ok(outcome) => outcome,
         Err(error) => {
-            return connection_error(
+            return connection_error_with_details_v2(
                 SecureTunnelStatus::SecureTunnelStatusConnectFailure,
-                error.to_string(),
+                error.message(),
+                GoConnectErrorJson::from_connect_error(&error),
             );
         }
     };
@@ -207,9 +257,10 @@ pub unsafe extern "C" fn secure_tunnel_client_connect(
         artifacts: outcome.artifacts,
         runtime: Arc::clone(&client.runtime),
     };
-    SecureTunnelConnectionResult {
+    SecureTunnelConnectionResultV2 {
         status: SecureTunnelStatus::SecureTunnelStatusSuccess,
         error: std::ptr::null_mut(),
+        error_details_json: std::ptr::null_mut(),
         connection: Box::into_raw(Box::new(handle)),
     }
 }
