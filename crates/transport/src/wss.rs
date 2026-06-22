@@ -137,11 +137,12 @@ fn validate_selected_subprotocol(
     }
 }
 
-const fn map_wss_connect_error(error: &tokio_tungstenite::tungstenite::Error) -> ApiError {
+fn map_wss_connect_error(error: &tokio_tungstenite::tungstenite::Error) -> ApiError {
     use tokio_tungstenite::tungstenite::Error;
 
     match error {
         Error::Tls(_) => ApiError::OuterTlsFailure(CarrierKind::Wss),
+        Error::Io(inner) if is_tls_io_error(inner) => ApiError::OuterTlsFailure(CarrierKind::Wss),
         Error::ConnectionClosed | Error::AlreadyClosed | Error::Io(_) => {
             ApiError::OuterPathFailure(CarrierKind::Wss)
         }
@@ -217,14 +218,19 @@ async fn receive_wss_record(
     }
 }
 
-const fn map_wss_runtime_error(error: &tokio_tungstenite::tungstenite::Error) -> ApiError {
+fn map_wss_runtime_error(error: &tokio_tungstenite::tungstenite::Error) -> ApiError {
     use tokio_tungstenite::tungstenite::Error;
 
     match error {
-        Error::ConnectionClosed | Error::AlreadyClosed | Error::Io(_) => ApiError::TransportClosed,
         Error::Tls(_) => ApiError::OuterTlsFailure(CarrierKind::Wss),
+        Error::Io(inner) if is_tls_io_error(inner) => ApiError::OuterTlsFailure(CarrierKind::Wss),
+        Error::ConnectionClosed | Error::AlreadyClosed | Error::Io(_) => ApiError::TransportClosed,
         _ => ApiError::OuterProtocolFailure(CarrierKind::Wss),
     }
+}
+
+fn is_tls_io_error(error: &std::io::Error) -> bool {
+    error.kind() == std::io::ErrorKind::InvalidData
 }
 
 #[cfg(test)]

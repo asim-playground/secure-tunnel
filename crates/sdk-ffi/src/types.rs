@@ -134,7 +134,10 @@ pub struct ClientConfig {
     pub record_read_timeout_ms: u64,
     /// Milliseconds allowed for one framed write.
     pub record_write_timeout_ms: u64,
-    /// DER-encoded outer TLS roots.
+    /// DER-encoded outer TLS roots added to platform trust.
+    ///
+    /// Android extra-root support is currently unavailable in the verifier
+    /// dependency and fails outer carrier TLS when non-empty.
     pub outer_root_certificates_der: Vec<Vec<u8>>,
     /// Pinned descriptor roots that may authorize service descriptors.
     pub descriptor_trust_anchors: Vec<DescriptorTrustAnchor>,

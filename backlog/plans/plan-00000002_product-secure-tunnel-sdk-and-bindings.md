@@ -148,8 +148,8 @@ Rust facade and behavior.
 - Status: task `00000021` adds local end-to-end harness and CLI smoke coverage
   for descriptor loading, production `QUIC`/`WSS` adapters, `Secure Ready`,
   account/device auth, application exchange, and close.
-- Missing: outer TLS custom-CA configuration product UX, HTTP proxy support,
-  retry policy hardening, and broader conformance/observability coverage.
+- Missing: HTTP proxy support, retry policy hardening, and broader
+  conformance/observability coverage.
 - Impact: Swift/Kotlin/Python packages can reuse a local Rust smoke oracle, but
   native package import tests still need generated bindings and artifacts.
 - Notes: managed-network tasks `00000013` and `00000014` should land after the
@@ -259,7 +259,7 @@ Rust facade and behavior.
     - `task-00000022` `add observability and conformance test matrix`
     - `task-00000031` `security hardening pass`
 - Exit Criteria:
-    - [ ] custom outer-TLS CA configuration works without weakening inner Noise
+    - [x] custom outer-TLS CA configuration works without weakening inner Noise
           trust.
     - [ ] proxied `WSS` works as a fallback path without creating a separate
           security model.
@@ -345,7 +345,7 @@ Rust facade and behavior.
 | task-`00000019` | `implement production quic and wss carrier adapters` | `Phase 1` | `task-00000012, task-00000018` | `completed` |
 | task-`00000020` | `implement account and device session protocol` | `Phase 1` | `task-00000006, task-00000011, task-00000018` | `completed` |
 | task-`00000021` | `build end-to-end tunnel harness and cli smoke path` | `Phase 1` | `task-00000019, task-00000020` | `completed` |
-| task-`00000013` | `allow optional custom ca cert for intercepted wss or quic` | `Phase 2` | `task-00000009, task-00000012, task-00000019` | `proposed` |
+| task-`00000013` | `allow optional custom ca cert for intercepted wss or quic` | `Phase 2` | `task-00000009, task-00000012, task-00000019` | `completed` |
 | task-`00000014` | `allow optional http proxy for wss client` | `Phase 2` | `task-00000009, task-00000012, task-00000013, task-00000019` | `proposed` |
 | task-`00000022` | `add observability and conformance test matrix` | `Phase 2` | `task-00000009, task-00000021` | `completed` |
 | task-`00000031` | `security hardening pass` | `Phase 2` | `task-00000019, task-00000021, task-00000022, task-00000023, task-00000024, task-00000026, task-00000030` | `completed` |
@@ -424,8 +424,8 @@ Rust facade and behavior.
 
 ## Immediate Next Actions
 
-1. Keep `task-00000013` and `task-00000014` queued for managed-network support
-   before declaring the SDK broadly production-ready.
+1. Keep `task-00000014` queued for managed-network proxy support before
+   declaring the SDK broadly production-ready.
 2. Decide whether the next release hardening slice should add macOS/Windows Go
    artifact matrix coverage or move to custom CA/proxy managed-network work.
 

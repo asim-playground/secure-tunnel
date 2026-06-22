@@ -26,11 +26,14 @@ pub async fn run_conformance_scenario(
     scenario: ConformanceScenario,
 ) -> HarnessResult<ConformanceReport> {
     match scenario {
-        ConformanceScenario::QuicSuccess => success_scenario(scenario, good_alpn(), None).await,
-        ConformanceScenario::QuicRejectedWssFallback => {
+        ConformanceScenario::QuicSuccess | ConformanceScenario::CustomCaQuicSuccess => {
+            success_scenario(scenario, good_alpn(), None).await
+        }
+        ConformanceScenario::QuicRejectedWssFallback
+        | ConformanceScenario::CustomCaQuicRejectedWssFallback => {
             success_scenario(scenario, bad_alpn(), None).await
         }
-        ConformanceScenario::CachedQuicBadWssFirst => {
+        ConformanceScenario::CachedQuicBadWssFirst | ConformanceScenario::CustomCaWssSuccess => {
             success_scenario(scenario, good_alpn(), Some(quic_bad_cache())).await
         }
         ConformanceScenario::FallbackDisabled => fallback_disabled().await,
@@ -43,6 +46,10 @@ pub async fn run_conformance_scenario(
         ConformanceScenario::StaleDeviceChallenge => stale_device_challenge().await,
         ConformanceScenario::ReplayedDeviceChallenge => replayed_device_challenge().await,
         ConformanceScenario::GracefulClose => graceful_close().await,
+        ConformanceScenario::CustomCaInnerTrustFailure => custom_ca_inner_trust_failure().await,
+        ConformanceScenario::CustomCaWrongRootTlsFailure => {
+            custom_ca_wrong_root_tls_failure().await
+        }
     }
 }
 
@@ -89,6 +96,38 @@ async fn wrong_service_static_key_pin() -> HarnessResult<ConformanceReport> {
         error,
         secure_tunnel_sdk::SdkErrorKind::InnerTrustFailure,
     ))
+}
+
+async fn custom_ca_inner_trust_failure() -> HarnessResult<ConformanceReport> {
+    let service = LocalService::start(good_alpn(), |_| {}).await?;
+    let config = service
+        .config()
+        .with_pinned_service_static_public_keys(vec![[9_u8; 32]]);
+    let result = service.connect(config, None).await?;
+    let error = require_connect_error(result, "custom CA must not bypass inner trust")?;
+    Ok(error_report(
+        ConformanceScenario::CustomCaInnerTrustFailure,
+        error,
+        secure_tunnel_sdk::SdkErrorKind::InnerTrustFailure,
+    ))
+}
+
+async fn custom_ca_wrong_root_tls_failure() -> HarnessResult<ConformanceReport> {
+    let service = LocalService::start(good_alpn(), |_| {}).await?;
+    let wrong_service = LocalService::start(good_alpn(), |_| {}).await?;
+    let config = service.config().with_outer_root_certificates_der(vec![
+        wrong_service.quic.root_certificate_der(),
+        wrong_service.wss.root_certificate_der(),
+    ]);
+    let result = service.connect(config, None).await?;
+    let error = require_connect_error(result, "wrong custom roots should fail outer TLS")?;
+    let mut report = error_report(
+        ConformanceScenario::CustomCaWrongRootTlsFailure,
+        error,
+        secure_tunnel_sdk::SdkErrorKind::OuterTlsFailure,
+    );
+    report.ok = report.ok && !report.attempts.is_empty();
+    Ok(report)
 }
 
 async fn wrong_descriptor_trust_anchor() -> HarnessResult<ConformanceReport> {

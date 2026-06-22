@@ -9,10 +9,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use quinn::crypto::rustls::QuicClientConfig;
+use rustls::ClientConfig;
+use rustls::crypto::CryptoProvider;
 use rustls::crypto::ring::default_provider;
 use rustls::pki_types::CertificateDer;
-use rustls::{ClientConfig, RootCertStore};
-use rustls_platform_verifier::BuilderVerifierExt;
+use rustls_platform_verifier::{BuilderVerifierExt, Verifier};
 use secure_tunnel_core::{
     ApiError, ApiResult, CarrierKind, NoisePublicKey, TrustAnchor,
     example_descriptor_trust_anchors, obfuscated_service_static_public_key,
@@ -52,10 +53,13 @@ impl TransportClientConfig {
         }
     }
 
-    /// Creates a configuration that trusts only the supplied DER roots.
+    /// Creates a configuration that augments platform trust with DER roots.
     ///
-    /// This is mainly used by local integration tests until the SDK-facing
-    /// custom-CA configuration lands in task `00000013`.
+    /// The extra roots apply only to outer carrier TLS. Inner descriptor and
+    /// service-static-key trust remain configured separately.
+    ///
+    /// Android extra-root support is currently unavailable in
+    /// `rustls-platform-verifier` `0.7`; non-empty roots fail outer TLS there.
     #[must_use]
     pub fn with_root_certificate_der(root_certificates_der: Vec<Vec<u8>>) -> Self {
         Self {
@@ -112,16 +116,10 @@ impl TransportClientConfig {
     }
 
     fn rustls_client_config(&self, carrier: CarrierKind) -> ApiResult<ClientConfig> {
-        if let Some(certificates) = &self.root_certificates_der {
-            client_config_with_roots(certificates, carrier)
-        } else {
-            let builder = ClientConfig::builder_with_provider(default_provider().into())
-                .with_safe_default_protocol_versions()
-                .map_err(|_| ApiError::OuterTlsFailure(carrier))?
-                .with_platform_verifier()
-                .map_err(|_| ApiError::OuterTlsFailure(carrier))?;
-            Ok(builder.with_no_client_auth())
-        }
+        self.root_certificates_der.as_ref().map_or_else(
+            || platform_client_config(carrier),
+            |certificates| client_config_with_extra_roots(certificates, carrier),
+        )
     }
 }
 
@@ -147,19 +145,70 @@ impl Default for TransportClientTimeouts {
     }
 }
 
-fn client_config_with_roots(
+fn platform_client_config(carrier: CarrierKind) -> ApiResult<ClientConfig> {
+    let builder = ClientConfig::builder_with_provider(default_provider().into())
+        .with_safe_default_protocol_versions()
+        .map_err(|_| ApiError::OuterTlsFailure(carrier))?
+        .with_platform_verifier()
+        .map_err(|_| ApiError::OuterTlsFailure(carrier))?;
+    Ok(builder.with_no_client_auth())
+}
+
+#[cfg(not(target_os = "android"))]
+fn client_config_with_extra_roots(
     certificates: &[Vec<u8>],
     carrier: CarrierKind,
 ) -> ApiResult<ClientConfig> {
-    let mut roots = RootCertStore::empty();
-    for certificate in certificates {
-        roots
-            .add(CertificateDer::from(certificate.clone()))
-            .map_err(|_| ApiError::OuterTlsFailure(carrier))?;
+    if certificates.is_empty() {
+        return platform_client_config(carrier);
     }
 
-    let builder = ClientConfig::builder_with_provider(default_provider().into())
-        .with_safe_default_protocol_versions()
+    let extra_roots: Vec<CertificateDer<'static>> = certificates
+        .iter()
+        .map(|certificate| CertificateDer::from(certificate.clone()))
+        .collect();
+    let provider: Arc<CryptoProvider> = default_provider().into();
+    let verifier = Verifier::new_with_extra_roots(extra_roots, Arc::clone(&provider))
         .map_err(|_| ApiError::OuterTlsFailure(carrier))?;
-    Ok(builder.with_root_certificates(roots).with_no_client_auth())
+    let builder = ClientConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()
+        .map_err(|_| ApiError::OuterTlsFailure(carrier))?
+        .dangerous()
+        .with_custom_certificate_verifier(Arc::new(verifier));
+    Ok(builder.with_no_client_auth())
+}
+
+#[cfg(target_os = "android")]
+fn client_config_with_extra_roots(
+    certificates: &[Vec<u8>],
+    carrier: CarrierKind,
+) -> ApiResult<ClientConfig> {
+    if certificates.is_empty() {
+        platform_client_config(carrier)
+    } else {
+        Err(ApiError::OuterTlsFailure(carrier))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TransportClientConfig;
+
+    #[test]
+    fn empty_extra_roots_use_platform_verifier() {
+        assert!(
+            TransportClientConfig::with_root_certificate_der(Vec::new())
+                .wss_client_config()
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn malformed_extra_roots_fail_tls_config() {
+        assert!(
+            TransportClientConfig::with_root_certificate_der(vec![b"not der".to_vec()])
+                .wss_client_config()
+                .is_err()
+        );
+    }
 }

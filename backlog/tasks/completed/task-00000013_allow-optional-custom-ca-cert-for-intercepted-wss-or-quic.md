@@ -36,30 +36,30 @@ trust without weakening or confusing the inner trust model.
 
 ### A) Client trust configuration is explicit
 
-- [ ] Define the first client-facing configuration shape for an optional custom
+- [x] Define the first client-facing configuration shape for an optional custom
       CA certificate or CA bundle that applies to outer `WSS` and `QUIC` TLS
       only.
-- [ ] Define whether the custom CA augments or replaces the platform trust
+- [x] Define whether the custom CA augments or replaces the platform trust
       store, and keep that behavior consistent across both carriers.
-- [ ] Keep the scope narrow: this task should not redesign the inner
+- [x] Keep the scope narrow: this task should not redesign the inner
       trust-anchor or server-key authorization model.
 
 ### B) Security and failure semantics stay separated
 
-- [ ] Preserve the rule that outer TLS trust does not replace inner Noise trust
+- [x] Preserve the rule that outer TLS trust does not replace inner Noise trust
       or service-identity validation.
-- [ ] Ensure the selected carrier, fallback reporting, and inner trust failures
+- [x] Ensure the selected carrier, fallback reporting, and inner trust failures
       remain distinguishable from outer certificate or TLS failures.
-- [ ] Document any compatibility limits for carriers or platforms where custom
+- [x] Document any compatibility limits for carriers or platforms where custom
       CA injection differs.
 
 ### C) Validation covers intercepted-network behavior
 
-- [ ] Add local tests or harness coverage for at least one custom-root `WSS`
+- [x] Add local tests or harness coverage for at least one custom-root `WSS`
       path and one custom-root `QUIC` path before closing the task.
-- [ ] Verify that the custom CA path composes with the existing selector
+- [x] Verify that the custom CA path composes with the existing selector
       semantics instead of bypassing them.
-- [ ] Record any follow-up work needed for client packaging, certificate
+- [x] Record any follow-up work needed for client packaging, certificate
       rotation, or operator UX, but keep carrier-path validation in scope for
       this task.
 
@@ -102,7 +102,7 @@ trust without weakening or confusing the inner trust model.
 
 ## Implementation Notes
 
-- [ ] Implementation notes added with command evidence.
+- [x] Implementation notes added with command evidence.
 - Treat this as outer-carrier compatibility work, not as a change to the inner
   secure-channel trust model.
 - Prefer one configuration surface that both `WSS` and `QUIC` adapters can
@@ -110,6 +110,36 @@ trust without weakening or confusing the inner trust model.
 - `2026-06-21`: Plan `00000002` adds `task-00000019` as the production-adapter
   prerequisite so custom-root validation exercises real carrier code rather
   than only the prototype harness.
+- `2026-06-22`: Kept the stable SDK field `outer_root_certificates_der`, but
+  defined it as additional outer TLS roots added to platform trust where the
+  platform verifier supports extra roots.
+- `2026-06-22`: Updated production transport config to use
+  `rustls_platform_verifier::Verifier::new_with_extra_roots` on supported
+  platforms. Android currently returns an outer TLS failure for non-empty extra
+  roots because `rustls-platform-verifier` `0.7` does not expose additive roots
+  there.
+- `2026-06-22`: Added transport tests for custom-root `QUIC`, custom-root
+  cached `WSS`, custom-root `QUIC` ALPN rejection with `WSS` fallback, and
+  wrong-root `QUIC`/`WSS` classification as outer TLS failures.
+- `2026-06-22`: Added conformance rows for `custom_ca_quic_success`,
+  `custom_ca_wss_success`, `custom_ca_quic_rejected_wss_fallback`, and
+  `custom_ca_inner_trust_failure`; removed the
+  `managed-custom-ca-product-ux` pending row.
+- `2026-06-22`: Added `custom_ca_wrong_root_tls_failure` to prove the SDK
+  surfaces wrong custom roots as `outer_tls_failure` with a non-empty attempt
+  trace.
+- `2026-06-22`: Fixed `WSS` connect error mapping so rustls certificate
+  failures surfaced as `io::ErrorKind::InvalidData` map to `outer_tls_failure`
+  rather than `outer_path_failure`.
+- Validation evidence:
+  - `cargo test -p secure-tunnel-transport --all-features custom_root`
+  - `cargo test -p secure-tunnel-transport --all-features wrong_custom_root`
+  - `cargo test -p secure-tunnel-transport --all-features extra_roots`
+  - `cargo test -p secure-tunnel-harness --all-features conformance_suite_runs_current_scenarios`
+  - `mise run conformance`
+  - `mise run security:test`
+  - `mise run lint-all`
+  - `mise run dev`
 
 ## Implementation Plan
 
@@ -121,8 +151,18 @@ trust without weakening or confusing the inner trust model.
 
 ## Review Notes
 
+- Independent review on `2026-06-22` found two medium issues:
+  - public config docs overstated Android extra-root support.
+  - plan/task completion state was inconsistent while review was still open.
+- Fixes:
+  - added Android caveats to Rust SDK, transport config, UniFFI, and Go docs.
+  - updated `plan-00000001` alongside `plan-00000002`.
+  - added `custom_ca_wrong_root_tls_failure` as SDK-facing conformance
+    coverage.
+- Re-review on `2026-06-22` found no remaining high/medium findings.
+
 ## Acceptance Closure
 
-- [ ] All acceptance criteria are satisfied and marked.
-- [ ] Verification commands and outcomes are recorded.
-- [ ] No unresolved high/medium findings remain.
+- [x] All acceptance criteria are satisfied and marked.
+- [x] Verification commands and outcomes are recorded.
+- [x] No unresolved high/medium findings remain.

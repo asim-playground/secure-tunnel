@@ -16,12 +16,12 @@ use secure_tunnel_core::{
 
 use self::fixture::{AuthorizationMode, ServiceFixture, TestResult};
 use self::server::{QuicServer, WssServer};
-use crate::{ProductionTransportPorts, TransportClientConfig, WssConnector};
+use crate::{ProductionTransportPorts, QuicConnector, TransportClientConfig, WssConnector};
 
 const NOW_UNIX_SECONDS: u64 = 1_742_000_000;
 
 #[tokio::test]
-async fn quic_adapter_reaches_secure_ready() -> TestResult<()> {
+async fn custom_root_quic_adapter_reaches_secure_ready() -> TestResult<()> {
     let fixture = ServiceFixture::new()?;
     let quic = QuicServer::start(
         fixture.clone(),
@@ -56,7 +56,7 @@ async fn quic_adapter_reaches_secure_ready() -> TestResult<()> {
 }
 
 #[tokio::test]
-async fn cached_fallback_wss_adapter_reaches_secure_ready() -> TestResult<()> {
+async fn custom_root_cached_fallback_wss_adapter_reaches_secure_ready() -> TestResult<()> {
     let fixture = ServiceFixture::new()?;
     let wss = WssServer::start(fixture.clone(), AuthorizationMode::Valid).await?;
     let descriptor = fixture.descriptor_for_ports(9, wss.port())?;
@@ -87,7 +87,7 @@ async fn cached_fallback_wss_adapter_reaches_secure_ready() -> TestResult<()> {
 }
 
 #[tokio::test]
-async fn quic_alpn_rejection_falls_back_to_wss() -> TestResult<()> {
+async fn custom_root_quic_alpn_rejection_falls_back_to_wss() -> TestResult<()> {
     let fixture = ServiceFixture::new()?;
     let quic = QuicServer::start(
         fixture.clone(),
@@ -168,6 +168,59 @@ async fn malformed_wss_target_fails_before_io() -> TestResult<()> {
     };
 
     assert_eq!(error, ApiError::OuterProtocolFailure(CarrierKind::Wss));
+    Ok(())
+}
+
+#[tokio::test]
+async fn wrong_custom_root_quic_fails_as_outer_tls_failure() -> TestResult<()> {
+    let fixture = ServiceFixture::new()?;
+    let quic = QuicServer::start(
+        fixture,
+        AuthorizationMode::Valid,
+        vec![secure_tunnel_core::QUIC_ALPN_V1.as_bytes().to_vec()],
+    )?;
+    let wrong_root = QuicServer::start_closing_after_handshake(vec![
+        secure_tunnel_core::QUIC_ALPN_V1.as_bytes().to_vec(),
+    ])?;
+    let connector = QuicConnector::new(
+        TransportClientConfig::with_root_certificate_der(vec![wrong_root.root_certificate_der()])
+            .with_timeouts(short_timeouts()),
+    );
+    let target = TransportTarget::Quic(secure_tunnel_core::QuicTarget {
+        connect_host: "127.0.0.1".to_owned(),
+        port: quic.port(),
+        alpn: secure_tunnel_core::QUIC_ALPN_V1.to_owned(),
+        sni_override: None,
+    });
+
+    let Err(error) = connector.connect(&target).await else {
+        panic!("wrong custom QUIC root should fail");
+    };
+
+    assert_eq!(error, ApiError::OuterTlsFailure(CarrierKind::Quic));
+    Ok(())
+}
+
+#[tokio::test]
+async fn wrong_custom_root_wss_fails_as_outer_tls_failure() -> TestResult<()> {
+    let fixture = ServiceFixture::new()?;
+    let wss = WssServer::start(fixture, AuthorizationMode::Valid).await?;
+    let wrong_root = WssServer::start_stalled_after_websocket().await?;
+    let connector = WssConnector::new(
+        TransportClientConfig::with_root_certificate_der(vec![wrong_root.root_certificate_der()])
+            .with_timeouts(short_timeouts()),
+    );
+    let target = TransportTarget::Wss(secure_tunnel_core::WssTarget {
+        url: format!("wss://127.0.0.1:{}/tunnel", wss.port()),
+        subprotocol: WSS_SUBPROTOCOL_V1.to_owned(),
+        authority_override: None,
+    });
+
+    let Err(error) = connector.connect(&target).await else {
+        panic!("wrong custom WSS root should fail");
+    };
+
+    assert_eq!(error, ApiError::OuterTlsFailure(CarrierKind::Wss));
     Ok(())
 }
 
@@ -312,5 +365,14 @@ fn cached_quic_bad() -> TransportCacheSnapshot {
         last_quic_failure: Some(FallbackReason::OuterPathFailure),
         next_quic_probe_after_unix_seconds: Some(NOW_UNIX_SECONDS + 60),
         highest_descriptor_serial: Some(1),
+    }
+}
+
+const fn short_timeouts() -> crate::TransportClientTimeouts {
+    crate::TransportClientTimeouts {
+        quic_connect: std::time::Duration::from_millis(100),
+        wss_connect: std::time::Duration::from_millis(100),
+        record_read: std::time::Duration::from_millis(100),
+        record_write: std::time::Duration::from_millis(100),
     }
 }

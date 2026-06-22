@@ -18,10 +18,14 @@ printf '%s\n' "${json}" | jq -e '
     "service_key_rotation_invalid",
     "stale_device_challenge",
     "replayed_device_challenge",
-    "graceful_close"
+    "graceful_close",
+    "custom_ca_quic_success",
+    "custom_ca_wss_success",
+    "custom_ca_quic_rejected_wss_fallback",
+    "custom_ca_inner_trust_failure",
+    "custom_ca_wrong_root_tls_failure"
   ])
   and ([.pending[].scenario] == [
-    "managed-custom-ca-product-ux",
     "proxied-wss",
     "abrupt-close",
     "truncated-close"

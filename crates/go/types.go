@@ -60,7 +60,9 @@ type DescriptorTrustAnchor struct {
 
 // ClientConfig is the Go SDK client configuration.
 type ClientConfig struct {
-	TransportPolicy               TransportPolicyConfig
+	TransportPolicy TransportPolicyConfig
+	// OuterRootCertificatesDER adds outer TLS roots to platform trust.
+	// Android extra-root support is currently unavailable and fails outer TLS when non-empty.
 	OuterRootCertificatesDER      [][]byte
 	DescriptorTrustAnchors        []DescriptorTrustAnchor
 	PinnedServiceStaticPublicKeys [][]byte

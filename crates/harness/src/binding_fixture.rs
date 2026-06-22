@@ -19,7 +19,7 @@ use crate::{DEVICE_KEY_SEED, HarnessError, HarnessResult, NOW_UNIX_SECONDS, map_
 pub struct BindingFixtureReport {
     /// Service descriptor JSON for the loopback server.
     pub descriptor_json: String,
-    /// DER-encoded outer TLS roots, base64 encoded for portable clients.
+    /// Additional DER-encoded outer TLS roots, base64 encoded for portable clients.
     pub outer_root_certificates_der_b64: Vec<String>,
     /// Accepted service static public keys, base64 encoded for portable clients.
     pub pinned_service_static_public_keys_b64: Vec<String>,

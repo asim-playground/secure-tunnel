@@ -37,6 +37,11 @@ async fn conformance_suite_runs_current_scenarios() {
             ConformanceScenario::StaleDeviceChallenge,
             ConformanceScenario::ReplayedDeviceChallenge,
             ConformanceScenario::GracefulClose,
+            ConformanceScenario::CustomCaQuicSuccess,
+            ConformanceScenario::CustomCaWssSuccess,
+            ConformanceScenario::CustomCaQuicRejectedWssFallback,
+            ConformanceScenario::CustomCaInnerTrustFailure,
+            ConformanceScenario::CustomCaWrongRootTlsFailure,
         ],
     );
     let pending: Vec<&str> = report
@@ -46,12 +51,7 @@ async fn conformance_suite_runs_current_scenarios() {
         .collect();
     assert_eq!(
         pending.as_slice(),
-        [
-            "managed-custom-ca-product-ux",
-            "proxied-wss",
-            "abrupt-close",
-            "truncated-close",
-        ],
+        ["proxied-wss", "abrupt-close", "truncated-close",],
     );
     let json = serde_json::to_string(&report).expect("report should serialize");
     assert_sanitized_json(&json);

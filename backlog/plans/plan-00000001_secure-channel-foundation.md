@@ -194,7 +194,7 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
     - `task-00000013` `allow optional custom ca cert for intercepted wss or quic`
     - `task-00000014` `allow optional http proxy for wss client`
 - Exit Criteria:
-    - [ ] the client can optionally trust a configured outer-TLS CA for
+    - [x] the client can optionally trust a configured outer-TLS CA for
       compatible `WSS` and `QUIC` deployments without weakening inner trust.
     - [ ] the client can optionally route `WSS` through a configured HTTP proxy
       without changing transport-selection semantics.
@@ -218,7 +218,7 @@ This plan turns the initial research for Secure Tunnel into a concrete v1 protoc
 | task-`00000015` | `stabilize ci portability and add docker repro` | `Phase 2` | `task-00000011` | `completed` |
 | task-`00000012` | `prototype quic-preferred transport with wss fallback and local secure session` | `Phase 2` | `task-00000005, task-00000008, task-00000009, task-00000010, task-00000011` | `completed` |
 | task-`00000016` | `update runtimes deps and add swift callable library surface` | `Phase 2` | `task-00000005, task-00000015` | `completed` |
-| task-`00000013` | `allow optional custom ca cert for intercepted wss or quic` | `Phase 3` | `task-00000009, task-00000012, task-00000019` | `proposed` |
+| task-`00000013` | `allow optional custom ca cert for intercepted wss or quic` | `Phase 3` | `task-00000009, task-00000012, task-00000019` | `completed` |
 | task-`00000014` | `allow optional http proxy for wss client` | `Phase 3` | `task-00000009, task-00000012, task-00000013, task-00000019` | `proposed` |
 
 ## Dependency Notes

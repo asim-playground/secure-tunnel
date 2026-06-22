@@ -28,7 +28,10 @@ use crate::session::SecureTunnelSession;
 pub struct ClientConfig {
     /// Transport selection policy.
     pub transport_policy: TransportPolicyConfig,
-    /// Optional DER-encoded outer TLS roots for local or managed deployments.
+    /// Optional DER-encoded outer TLS roots added to platform trust.
+    ///
+    /// Android extra-root support is currently unavailable in the verifier
+    /// dependency and fails outer carrier TLS when non-empty.
     pub outer_root_certificates_der: Option<Vec<Vec<u8>>>,
     /// Pinned descriptor roots that may authorize service descriptors.
     pub descriptor_trust_anchors: Vec<secure_tunnel_core::TrustAnchor>,
@@ -57,7 +60,12 @@ impl ClientConfig {
         self
     }
 
-    /// Sets DER-encoded outer TLS roots for local or managed-network use.
+    /// Adds DER-encoded outer TLS roots for local or managed-network use.
+    ///
+    /// These roots apply only to the outer `QUIC`/`WSS` carrier TLS verifier.
+    /// They do not authorize descriptors or inner service static keys.
+    /// Android extra-root support is currently unavailable in the verifier
+    /// dependency and fails outer carrier TLS when non-empty.
     #[must_use]
     pub fn with_outer_root_certificates_der(mut self, certificates: Vec<Vec<u8>>) -> Self {
         self.outer_root_certificates_der = Some(certificates);

@@ -44,6 +44,16 @@ pub enum ConformanceScenario {
     ReplayedDeviceChallenge,
     /// Encrypted close is classified as graceful.
     GracefulClose,
+    /// Custom outer TLS roots allow direct `QUIC`.
+    CustomCaQuicSuccess,
+    /// Custom outer TLS roots allow cached `WSS` first.
+    CustomCaWssSuccess,
+    /// Custom outer TLS roots compose with `QUIC` to `WSS` fallback.
+    CustomCaQuicRejectedWssFallback,
+    /// Custom outer TLS roots do not bypass inner service trust.
+    CustomCaInnerTrustFailure,
+    /// Wrong custom outer TLS roots surface as SDK outer TLS failure.
+    CustomCaWrongRootTlsFailure,
 }
 
 impl ConformanceScenario {
@@ -64,6 +74,11 @@ impl ConformanceScenario {
             Self::StaleDeviceChallenge => "stale-device-challenge",
             Self::ReplayedDeviceChallenge => "replayed-device-challenge",
             Self::GracefulClose => "graceful-close",
+            Self::CustomCaQuicSuccess => "custom-ca-quic-success",
+            Self::CustomCaWssSuccess => "custom-ca-wss-success",
+            Self::CustomCaQuicRejectedWssFallback => "custom-ca-quic-rejected-wss-fallback",
+            Self::CustomCaInnerTrustFailure => "custom-ca-inner-trust-failure",
+            Self::CustomCaWrongRootTlsFailure => "custom-ca-wrong-root-tls-failure",
         }
     }
 }
@@ -100,6 +115,17 @@ impl FromStr for ConformanceScenario {
                 Ok(Self::ReplayedDeviceChallenge)
             }
             "graceful-close" | "graceful_close" => Ok(Self::GracefulClose),
+            "custom-ca-quic-success" | "custom_ca_quic_success" => Ok(Self::CustomCaQuicSuccess),
+            "custom-ca-wss-success" | "custom_ca_wss_success" => Ok(Self::CustomCaWssSuccess),
+            "custom-ca-quic-rejected-wss-fallback" | "custom_ca_quic_rejected_wss_fallback" => {
+                Ok(Self::CustomCaQuicRejectedWssFallback)
+            }
+            "custom-ca-inner-trust-failure" | "custom_ca_inner_trust_failure" => {
+                Ok(Self::CustomCaInnerTrustFailure)
+            }
+            "custom-ca-wrong-root-tls-failure" | "custom_ca_wrong_root_tls_failure" => {
+                Ok(Self::CustomCaWrongRootTlsFailure)
+            }
             _ => Err(HarnessError::Invariant("unknown conformance scenario")),
         }
     }
@@ -158,6 +184,11 @@ const CURRENT_SCENARIOS: &[ConformanceScenario] = &[
     ConformanceScenario::StaleDeviceChallenge,
     ConformanceScenario::ReplayedDeviceChallenge,
     ConformanceScenario::GracefulClose,
+    ConformanceScenario::CustomCaQuicSuccess,
+    ConformanceScenario::CustomCaWssSuccess,
+    ConformanceScenario::CustomCaQuicRejectedWssFallback,
+    ConformanceScenario::CustomCaInnerTrustFailure,
+    ConformanceScenario::CustomCaWrongRootTlsFailure,
 ];
 
 /// Runs all implemented conformance scenarios.
@@ -180,10 +211,6 @@ pub async fn run_conformance_suite() -> HarnessResult<ConformanceSuiteReport> {
 
 fn pending_rows() -> Vec<PendingConformanceReport> {
     vec![
-        PendingConformanceReport {
-            scenario: "managed-custom-ca-product-ux".to_owned(),
-            reason: "blocked on task-00000013".to_owned(),
-        },
         PendingConformanceReport {
             scenario: "proxied-wss".to_owned(),
             reason: "blocked on task-00000014".to_owned(),

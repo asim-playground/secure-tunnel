@@ -86,9 +86,11 @@ Outer TLS identity and inner service identity are related but separate:
   prologue and service static public key authorization
 
 The descriptor must explicitly carry any carrier-local host, authority, SNI, or
-URL mapping that differs from `service_authority`. Private outer-TLS trust and
-managed-network proxying remain compatibility extensions; they must not weaken
-inner trust validation.
+URL mapping that differs from `service_authority`. Private outer-TLS roots are
+client configuration that augments platform trust where the platform verifier
+supports it; Android support may require a later verifier-specific path.
+Managed-network proxying is also client configuration. Neither extension may
+weaken inner trust validation.
 
 ## Telemetry Requirements
 
