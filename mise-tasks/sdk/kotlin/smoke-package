@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+#MISE description="Run end-to-end smoke through the packaged Kotlin JVM SDK"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+# shellcheck disable=SC1091
+# shellcheck source=../smoke-common.sh
+source mise-tasks/sdk/smoke-common.sh
+# shellcheck disable=SC1091
+# shellcheck source=common.sh
+source mise-tasks/sdk/kotlin/common.sh
+
+if [[ "${SECURE_TUNNEL_KOTLIN_SKIP_PACKAGE:-0}" != "1" ]]; then
+  mise run sdk:kotlin:package
+fi
+
+consumer_root="$(kotlin_sdk_consumer_root)"
+maven_repo="$(kotlin_sdk_maven_repo)"
+fixture_json="$(mktemp "${TMPDIR:-/tmp}/secure-tunnel-kotlin-package-fixture.XXXXXX.json")"
+fixture_properties="${consumer_root}/fixture.properties"
+trap 'stop_secure_tunnel_fixture; rm -f "${fixture_json}"' EXIT
+
+kotlin_sdk_remove_under_target "${consumer_root}"
+mkdir -p "${consumer_root}/src/main/kotlin"
+cat >"${consumer_root}/settings.gradle.kts" <<'KOTLIN'
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+rootProject.name = "secure-tunnel-kotlin-consumer"
+KOTLIN
+cat >"${consumer_root}/build.gradle.kts" <<KOTLIN
+plugins {
+    kotlin("jvm") version "2.3.21"
+    application
+}
+
+repositories {
+    maven {
+        url = uri("${maven_repo}")
+    }
+    mavenCentral()
+}
+
+kotlin {
+    jvmToolchain(21)
+}
+
+dependencies {
+    implementation("io.github.asimihsan:secure-tunnel-kotlin:0.1.0")
+}
+
+application {
+    mainClass.set("SmokeKt")
+    applicationDefaultJvmArgs = listOf(
+        "-DsecureTunnelFixtureProperties=${fixture_properties}",
+    )
+}
+KOTLIN
+cp bindings/smoke/kotlin/src/main/kotlin/Smoke.kt \
+  "${consumer_root}/src/main/kotlin/Smoke.kt"
+
+start_secure_tunnel_fixture "${fixture_json}"
+python3 - "${fixture_json}" "${fixture_properties}" <<'PY'
+import base64
+import json
+import sys
+from pathlib import Path
+
+fixture = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+props = {
+    "descriptor_json_b64": base64.b64encode(
+        fixture["descriptor_json"].encode("utf-8"),
+    ).decode("ascii"),
+    "outer_root_certificates_der_b64": ",".join(
+        fixture["outer_root_certificates_der_b64"],
+    ),
+    "pinned_service_static_public_keys_b64": ",".join(
+        fixture["pinned_service_static_public_keys_b64"],
+    ),
+    "now_unix_seconds": str(fixture["now_unix_seconds"]),
+    "smoke_ping_b64": fixture["smoke_ping_b64"],
+    "smoke_pong_b64": fixture["smoke_pong_b64"],
+}
+Path(sys.argv[2]).write_text(
+    "".join(f"{key}={value}\n" for key, value in props.items()),
+    encoding="utf-8",
+)
+PY
+
+gradle -p "${consumer_root}" --quiet run

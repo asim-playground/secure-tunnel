@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+#MISE description="Build the local Kotlin JVM SDK package"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+# shellcheck disable=SC1091
+# shellcheck source=common.sh
+source mise-tasks/sdk/kotlin/common.sh
+
+mise run sdk:generate-bindings
+cargo build -p secure-tunnel-sdk-ffi --lib --release
+
+output_root="$(kotlin_sdk_output_root)"
+package_root="$(kotlin_sdk_package_root)"
+maven_repo="$(kotlin_sdk_maven_repo)"
+resource_dir="$(kotlin_sdk_jna_resource_dir)"
+lib_name="$(kotlin_sdk_library_name)"
+
+kotlin_sdk_remove_under_target "${output_root}"
+mkdir -p \
+  "${package_root}/src/main/kotlin" \
+  "${package_root}/src/main/resources/${resource_dir}" \
+  "${maven_repo}"
+
+cp bindings/kotlin/build.gradle.kts "${package_root}/build.gradle.kts"
+cp bindings/kotlin/settings.gradle.kts "${package_root}/settings.gradle.kts"
+cp bindings/kotlin/README.md "${package_root}/README.md"
+cp -R target/generated-bindings/uniffi/kotlin/. "${package_root}/src/main/kotlin/"
+cp "target/release/${lib_name}" "${package_root}/src/main/resources/${resource_dir}/${lib_name}"
+if command -v strip >/dev/null 2>&1; then
+  strip "${package_root}/src/main/resources/${resource_dir}/${lib_name}" || true
+fi
+
+gradle -p "${package_root}" --quiet clean build publish \
+  -PsecureTunnelMavenRepo="${maven_repo}"
+
+echo "Kotlin SDK package generated at ${package_root}"

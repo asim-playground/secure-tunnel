@@ -153,6 +153,10 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: mise run test
+      - name: Run Kotlin SDK package smoke
+        if: runner.os != 'Windows'
+        shell: bash
+        run: mise run sdk:kotlin
       - name: Run Swift SDK package smoke
         if: runner.os == 'macOS'
         shell: bash

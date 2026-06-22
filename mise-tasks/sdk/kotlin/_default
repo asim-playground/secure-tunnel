@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Build, check, and smoke the Kotlin JVM SDK package"
+set -euo pipefail
+
+mise run sdk:kotlin:check-package
+SECURE_TUNNEL_KOTLIN_SKIP_PACKAGE=1 mise run sdk:kotlin:smoke-package

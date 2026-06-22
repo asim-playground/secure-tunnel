@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+#MISE description="Check the generated Kotlin JVM SDK package artifact layout"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+# shellcheck disable=SC1091
+# shellcheck source=common.sh
+source mise-tasks/sdk/kotlin/common.sh
+
+if [[ "${SECURE_TUNNEL_KOTLIN_SKIP_PACKAGE:-0}" != "1" ]]; then
+  mise run sdk:kotlin:package
+fi
+
+package_root="$(kotlin_sdk_package_root)"
+maven_repo="$(kotlin_sdk_maven_repo)"
+resource_dir="$(kotlin_sdk_jna_resource_dir)"
+lib_name="$(kotlin_sdk_library_name)"
+jar_path="${package_root}/build/libs/secure-tunnel-kotlin-0.1.0.jar"
+pom_path="${maven_repo}/io/github/asimihsan/secure-tunnel-kotlin/0.1.0/secure-tunnel-kotlin-0.1.0.pom"
+
+test -f "${package_root}/build.gradle.kts"
+test -f "${package_root}/settings.gradle.kts"
+test -f "${package_root}/src/main/kotlin/uniffi/secure_tunnel_sdk_ffi/secure_tunnel_sdk_ffi.kt"
+test -f "${package_root}/src/main/resources/${resource_dir}/${lib_name}"
+test -f "${jar_path}"
+test -f "${pom_path}"
+jar tf "${jar_path}" | grep -F "${resource_dir}/${lib_name}" >/dev/null
+grep -F "net.java.dev.jna" "${pom_path}" >/dev/null
+if command -v file >/dev/null 2>&1; then
+  native_info="$(file "${package_root}/src/main/resources/${resource_dir}/${lib_name}")"
+  if grep -Eq 'not stripped|with debug_info' <<<"${native_info}"; then
+    echo "Kotlin SDK native library must be release-built and stripped: ${native_info}" >&2
+    exit 1
+  fi
+fi
+
+echo "Kotlin SDK package checks passed at ${package_root}"

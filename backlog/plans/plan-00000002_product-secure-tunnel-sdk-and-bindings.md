@@ -215,7 +215,7 @@ Rust facade and behavior.
 
 ## Phase Plan
 
-- Current Phase: `Phase 4 - package native SDKs`
+- Current Phase: `Phase 5 - package Flutter and Go SDKs`
 
 ### Phase 0 - `close foundation gates`
 
@@ -292,13 +292,13 @@ Rust facade and behavior.
 - Exit Criteria:
     - [x] Swift/iOS is the first production-grade SDK package and can run a
           descriptor/session smoke test.
-    - [ ] Kotlin can import the artifact and run the same scenario through JNA
+    - [x] Kotlin can import the artifact and run the same scenario through JNA
           or the documented UniFFI backend.
     - [x] Python can import the package and run the same scenario, with a clear
           decision on whether UniFFI replaces or wraps the existing PyO3 path.
     - [x] Rust client can run the same scenario against a Python FastAPI server
           fixture without changing protocol semantics.
-    - [ ] Kotlin and Python are at least at generated-binding and package smoke
+    - [x] Kotlin and Python are at least at generated-binding and package smoke
           parity before release CI treats them as supported SDK targets.
 
 ### Phase 5 - `package Flutter and Go SDKs`
@@ -347,7 +347,7 @@ Rust facade and behavior.
 | task-`00000031` | `security hardening pass` | `Phase 2` | `task-00000019, task-00000021, task-00000022, task-00000023, task-00000024, task-00000026, task-00000030` | `completed` |
 | task-`00000023` | `create uniffi sdk facade and bindgen tooling` | `Phase 3` | `task-00000018, task-00000021, task-00000022` | `completed` |
 | task-`00000024` | `package swift sdk as swiftpm and xcframework` | `Phase 4` | `task-00000022, task-00000023` | `completed` |
-| task-`00000025` | `package kotlin sdk as jvm or android artifact` | `Phase 4` | `task-00000022, task-00000023` | `proposed` |
+| task-`00000025` | `package kotlin sdk as jvm or android artifact` | `Phase 4` | `task-00000022, task-00000023` | `completed` |
 | task-`00000026` | `package python sdk from the shared rust facade` | `Phase 4` | `task-00000022, task-00000023` | `completed` |
 | task-`00000030` | `build python fastapi server and rust client e2e` | `Phase 4` | `task-00000023, task-00000026` | `completed` |
 | task-`00000028` | `package flutter dart sdk using rust facade` | `Phase 5` | `task-00000018, task-00000021, task-00000022, task-00000024` | `proposed` |
@@ -418,16 +418,14 @@ Rust facade and behavior.
 
 ## Immediate Next Actions
 
-1. Start `task-00000025` to package the Kotlin SDK as the next UniFFI native
-   artifact.
-2. Start `task-00000027` to make SDK release packaging decide how to repair
-   macOS Python wheels that reference Homebrew `libiconv`, archive package
-   outputs, and fail stale generated/package metadata.
-3. Start `task-00000028` and `task-00000029` after Kotlin package smoke parity,
-   keeping Flutter/Dart and native Go on the same fixture semantics as Swift,
-   Kotlin, Python, and Rust-client/FastAPI smokes.
-5. Keep `task-00000013` and `task-00000014` queued for managed-network support
+1. Start `task-00000028` and `task-00000029`, keeping Flutter/Dart and native
+   Go on the same fixture semantics as Swift, Kotlin, Python, and
+   Rust-client/FastAPI smokes.
+2. Keep `task-00000013` and `task-00000014` queued for managed-network support
    before declaring the SDK broadly production-ready.
+3. Start `task-00000027` after Flutter/Dart and Go package smoke parity, so
+   release packaging can archive all supported SDK artifacts and fail stale
+   generated/package metadata.
 
 ## Implementation Notes
 
@@ -511,6 +509,11 @@ Rust facade and behavior.
   cancellation/deadline-aware selector inputs, bounded WSS logical record
   reads, STRIDE documentation, hardening tests, and cargo-mutants smoke/list
   automation.
+- `2026-06-22`: Completed `task-00000025` with a JVM-first Kotlin SDK package
+  that embeds the release-built host `secure_tunnel_sdk_ffi` native library
+  for JNA loading, publishes to a generated local Maven repo, runs generated
+  and packaged Kotlin QUIC/session smokes, and gates non-Windows CI with
+  `mise run sdk:kotlin`.
 
 ## Completion Checklist
 
