@@ -60,6 +60,8 @@ mise run sdk:release:dry-run
 Linux builds and smokes:
 
 - UniFFI generated binding presence and untracked-output policy.
+- Generated Swift UniFFI binding compiler/session smoke with `swiftc`; this is
+  not the SwiftPM/XCFramework package lane.
 - Kotlin JVM package, local Maven artifact, and fixture-backed consumer smoke.
 - Python wheel import check and wheel-installed fixture-backed session smoke.
 - Flutter/Dart generated package, analyzer/import tests, and session smoke.

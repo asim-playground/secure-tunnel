@@ -4,5 +4,12 @@ set -euo pipefail
 
 mise run sdk:smoke-python
 mise run sdk:python-fastapi-smoke
-mise run sdk:smoke-swift
+if [[ "${SECURE_TUNNEL_SKIP_SWIFT_SMOKE:-0}" == "1" ]]; then
+  echo "Skipping Swift smoke because SECURE_TUNNEL_SKIP_SWIFT_SMOKE=1"
+elif command -v swiftc >/dev/null 2>&1; then
+  mise run sdk:smoke-swift
+else
+  echo "swiftc not found; run mise install swift@6.3.2 or set SECURE_TUNNEL_SKIP_SWIFT_SMOKE=1" >&2
+  exit 1
+fi
 mise run sdk:smoke-kotlin

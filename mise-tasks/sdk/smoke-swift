@@ -3,7 +3,15 @@
 set -euo pipefail
 
 cd "${MISE_PROJECT_ROOT:?}"
+# shellcheck disable=SC1091
+# shellcheck source=smoke-common.sh
 source mise-tasks/sdk/smoke-common.sh
+
+if ! command -v swiftc >/dev/null 2>&1; then
+  echo "swiftc not found; run mise install swift@6.3.2 before sdk:smoke-swift" >&2
+  exit 1
+fi
+swiftc --version
 
 mise run sdk:generate-bindings
 mkdir -p target/sdk-smoke/swift

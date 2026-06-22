@@ -6,6 +6,12 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     mise run mac-setup
 fi
 
+case "$(uname -s)" in
+    Darwin | Linux)
+        mise run swift:setup
+        ;;
+esac
+
 mise run rust:ensure-components
 
 

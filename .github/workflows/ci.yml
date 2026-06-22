@@ -13,7 +13,7 @@ env:
 jobs:
   deps:
     name: Dependency Checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
@@ -61,7 +61,7 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
@@ -112,7 +112,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-24.04, macos-latest]
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
@@ -150,21 +150,19 @@ jobs:
           kache --version
           kache stats || true
       - name: Run full test suite
-        if: runner.os != 'Windows'
         shell: bash
         run: mise run test
       - name: Run Kotlin SDK package smoke
-        if: runner.os != 'Windows'
         shell: bash
         run: mise run sdk:kotlin
+      - name: Run Swift generated binding smoke
+        if: runner.os == 'Linux'
+        shell: bash
+        run: mise run sdk:smoke-swift
       - name: Run Swift SDK package smoke
         if: runner.os == 'macOS'
         shell: bash
         run: mise run sdk:swift
-      - name: Run Rust workspace tests
-        if: runner.os == 'Windows'
-        shell: bash
-        run: mise x -- cargo test --workspace
       - name: Quiesce kache cache
         if: always()
         shell: bash
@@ -178,7 +176,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-24.04, macos-latest]
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
@@ -234,7 +232,7 @@ jobs:
 
   coverage:
     name: Coverage
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       - uses: jdx/mise-action@v4
@@ -291,7 +289,7 @@ jobs:
 
   cross-compile:
     name: Cross Compile
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:

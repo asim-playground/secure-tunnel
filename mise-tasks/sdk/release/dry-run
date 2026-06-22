@@ -14,6 +14,7 @@ case "$(uname -s)" in
     ;;
   Linux)
     packages="kotlin,python,flutter,go"
+    mise run sdk:smoke-swift
     mise run sdk:kotlin
     mise run python:check-wheel
     mise run python:smoke-wheel

@@ -1,7 +1,8 @@
 # Swift SDK Package
 
 `task-00000024` packages the UniFFI Swift bindings and Rust static library as a
-local SwiftPM package backed by an XCFramework.
+local SwiftPM package backed by an XCFramework. That package lane is
+macOS/Xcode-only.
 
 Generated package output lives under:
 
@@ -23,12 +24,18 @@ source of truth is:
 Useful tasks:
 
 ```bash
+mise run sdk:smoke-swift
 mise run sdk:swift:package
 mise run sdk:swift:check-package
 mise run sdk:swift:smoke-package
 mise run sdk:swift:smoke-ios-simulator
 mise run sdk:swift
 ```
+
+`mise run sdk:smoke-swift` is the cross-platform compiler smoke for generated
+UniFFI Swift bindings. It runs on Ubuntu 24.04 and macOS with `swiftc` and the
+local Rust dynamic library. It does not build or validate the SwiftPM binary
+package.
 
 The package uses `SecureTunnel` as the public Swift module and keeps the
 generated UniFFI C module name `secure_tunnel_sdk_ffiFFI` internal to the binary

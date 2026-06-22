@@ -212,6 +212,7 @@ fn sdk_config(config: FlutterClientConfig) -> Result<secure_tunnel_sdk::ClientCo
         } else {
             Some(config.outer_root_certificates_der)
         },
+        wss_http_proxy: None,
         descriptor_trust_anchors: if config.descriptor_trust_anchors.is_empty() {
             defaults.descriptor_trust_anchors
         } else {

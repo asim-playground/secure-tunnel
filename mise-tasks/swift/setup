@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+#MISE description="Set up Swift toolchain prerequisites"
+set -euo pipefail
+
+ubuntu_packages=(
+  binutils
+  git
+  gnupg2
+  libc6-dev
+  libcurl4-openssl-dev
+  libedit2
+  libgcc-13-dev
+  libncurses-dev
+  libpython3-dev
+  libsqlite3-0
+  libstdc++-13-dev
+  libxml2-dev
+  libz3-dev
+  pkg-config
+  tzdata
+  zip
+  unzip
+  zlib1g-dev
+  build-essential
+  clang
+  lld
+  ca-certificates
+)
+
+print_missing_packages() {
+  printf 'Missing Swift prerequisite packages: %s\n' "$*" >&2
+  printf 'Install them with:\n  sudo apt-get update && sudo apt-get install -y --no-install-recommends %s\n' "$*" >&2
+}
+
+verify_swift_commands() {
+  if command -v swift >/dev/null 2>&1 && command -v swiftc >/dev/null 2>&1; then
+    swift --version
+    swiftc --version
+  else
+    echo "Swift toolchain is not on PATH yet; run mise install swift@6.3.2" >&2
+  fi
+}
+
+case "$(uname -s)" in
+  Linux)
+    if [[ ! -r /etc/os-release ]]; then
+      echo "Swift smoke supported on macOS and Ubuntu 24.04 only; missing /etc/os-release" >&2
+      exit 1
+    fi
+
+    # shellcheck disable=SC1091
+    source /etc/os-release
+    if [[ "${ID:-}" != "ubuntu" || "${VERSION_ID:-}" != "24.04" ]]; then
+      echo "Swift smoke supported on macOS and Ubuntu 24.04 only; found ${PRETTY_NAME:-unknown Linux}" >&2
+      exit 1
+    fi
+
+    if ! command -v dpkg-query >/dev/null 2>&1; then
+      echo "dpkg-query is required to verify Ubuntu Swift prerequisites" >&2
+      exit 1
+    fi
+
+    missing=()
+    for package in "${ubuntu_packages[@]}"; do
+      if ! dpkg-query -W -f='${db:Status-Abbrev}' "${package}" 2>/dev/null | grep -q '^ii '; then
+        missing+=("${package}")
+      fi
+    done
+
+    if (( ${#missing[@]} > 0 )); then
+      if [[ "${SECURE_TUNNEL_SWIFT_SETUP_INSTALL:-1}" == "0" ]]; then
+        print_missing_packages "${missing[*]}"
+        exit 1
+      fi
+      if ! command -v apt-get >/dev/null 2>&1; then
+        print_missing_packages "${missing[*]}"
+        exit 1
+      fi
+      sudo_cmd=()
+      if (( EUID != 0 )); then
+        if command -v sudo >/dev/null 2>&1; then
+          sudo_cmd=(sudo)
+        else
+          print_missing_packages "${missing[*]}"
+          exit 1
+        fi
+      fi
+      "${sudo_cmd[@]}" apt-get update
+      DEBIAN_FRONTEND=noninteractive "${sudo_cmd[@]}" apt-get install -y --no-install-recommends "${missing[@]}"
+    fi
+
+    echo "Ubuntu 24.04 Swift prerequisites are installed"
+    verify_swift_commands
+    ;;
+  Darwin)
+    if ! xcode-select -p >/dev/null 2>&1; then
+      echo "Xcode command-line tools are required for Swift SDK packaging" >&2
+      exit 1
+    fi
+    if ! command -v swift >/dev/null 2>&1 || ! command -v swiftc >/dev/null 2>&1; then
+      echo "swift and swiftc are required; install them with Xcode or mise" >&2
+      exit 1
+    fi
+    swift --version
+    swiftc --version
+    ;;
+  *)
+    echo "Swift smoke supported on macOS and Ubuntu 24.04 only" >&2
+    exit 1
+    ;;
+esac
