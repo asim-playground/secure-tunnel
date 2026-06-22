@@ -309,7 +309,7 @@ Rust facade and behavior.
     - `task-00000028` `package flutter dart sdk using rust facade`
     - `task-00000029` `package go sdk over stable c abi`
 - Exit Criteria:
-    - [ ] Flutter/Dart can import the package and run a descriptor/session smoke
+    - [x] Flutter/Dart can import the package and run a descriptor/session smoke
           test through a hand-written facade over generated bridge code.
     - [ ] Go can import the package and run a descriptor/session smoke test over
           the stable C ABI.

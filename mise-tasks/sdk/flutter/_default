@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE description="Build and smoke-test the local Flutter/Dart SDK package"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+
+mise run sdk:flutter:check-package
+SECURE_TUNNEL_FLUTTER_SKIP_PACKAGE=1 mise run sdk:flutter:smoke-package

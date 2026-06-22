@@ -1,0 +1,21 @@
+[package]
+name = "secure_tunnel_flutter_bridge"
+version = "0.1.0"
+edition = "2024"
+license = "MPL-2.0"
+rust-version = "1.96.0"
+authors = ["Asim Ihsan"]
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+flutter_rust_bridge = "2.13.0-beta.2"
+secure-tunnel-core = { path = "../../../../../crates/core", version = "0.1.0" }
+secure-tunnel-sdk = { path = "../../../../../crates/sdk", version = "0.1.0" }
+tokio = { version = "1", features = ["rt-multi-thread"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

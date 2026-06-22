@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+#MISE description="Run end-to-end smoke through the generated Flutter SDK package"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+# shellcheck disable=SC1091
+# shellcheck source=../smoke-common.sh
+source mise-tasks/sdk/smoke-common.sh
+# shellcheck disable=SC1091
+# shellcheck source=common.sh
+source mise-tasks/sdk/flutter/common.sh
+
+if [[ "${SECURE_TUNNEL_FLUTTER_SKIP_PACKAGE:-0}" != "1" ]]; then
+  mise run sdk:flutter:package
+fi
+
+package_root="$(flutter_sdk_package_root)"
+fixture_json="$(mktemp "${TMPDIR:-/tmp}/secure-tunnel-flutter-package-fixture.XXXXXX.json")"
+trap 'stop_secure_tunnel_fixture; rm -f "${fixture_json}"' EXIT
+
+start_secure_tunnel_fixture "${fixture_json}"
+(
+  cd "${package_root}"
+  export LD_LIBRARY_PATH="${package_root}/build/native_assets/linux:${LD_LIBRARY_PATH:-}"
+  export DYLD_LIBRARY_PATH="${package_root}/build/native_assets/macos:${DYLD_LIBRARY_PATH:-}"
+  SECURE_TUNNEL_FLUTTER_FIXTURE_JSON="${fixture_json}" \
+    flutter test test/session_smoke_test.dart
+)

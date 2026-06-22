@@ -41,27 +41,27 @@ task wiring.
 
 ### A) Flutter/Dart binding strategy is explicit
 
-- [ ] Decide the first Flutter/Dart bridge path, with Flutter Rust Bridge as
+- [x] Decide the first Flutter/Dart bridge path, with Flutter Rust Bridge as
       the recommended default unless task evidence favors direct Dart FFI plus
       `ffigen`.
-- [ ] Keep the Flutter/Dart surface backed by the Rust SDK facade from
+- [x] Keep the Flutter/Dart surface backed by the Rust SDK facade from
       `task-00000018`, not by internal selector, Noise, or transport types.
-- [ ] Document how the Flutter/Dart SDK relates to the Swift/iOS package from
+- [x] Document how the Flutter/Dart SDK relates to the Swift/iOS package from
       `task-00000024` without making Swift wrappers the Dart API boundary.
 
 ### B) Package and generated-code policy exist
 
-- [ ] Add a Flutter/Dart package layout or example app path for the SDK.
-- [ ] Add generated-code policy, bridge generation, and drift-check tasks.
-- [ ] Add hand-written Dart facades around generated bridge code so app code can
+- [x] Add a Flutter/Dart package layout or example app path for the SDK.
+- [x] Add generated-code policy, bridge generation, and drift-check tasks.
+- [x] Add hand-written Dart facades around generated bridge code so app code can
       depend on fakeable interfaces in tests.
 
 ### C) Flutter smoke tests prove consumption
 
-- [ ] Add a Flutter/Dart import or analyzer smoke test.
-- [ ] Add an iOS simulator native smoke path adapted from `flutter_template`
+- [x] Add a Flutter/Dart import or analyzer smoke test.
+- [x] Add an iOS simulator native smoke path adapted from `flutter_template`
       once the Rust iOS artifact exists.
-- [ ] Run at least one descriptor/config/session scenario through the
+- [x] Run at least one descriptor/config/session scenario through the
       Flutter/Dart facade or a documented local fixture.
 
 ## Cross-Repo Boundaries
@@ -102,24 +102,71 @@ task wiring.
 
 ## Implementation Notes
 
-- [ ] Implementation notes added with command evidence.
+- [x] Implementation notes added with command evidence.
 - Use `/Users/asimi/workplace/flutter_template` for local operator patterns and
   `/Users/asimi/Downloads/references/flutter_rust_bridge` plus
   `/Users/asimi/Downloads/references/dart-native` for upstream reference
   examples.
+- Bridge decision: use Flutter Rust Bridge with Dart native assets. Direct Dart
+  FFI plus `ffigen` would duplicate the C ABI ownership model that is reserved
+  for Go, while FRB gives Flutter a native-assets package shape and generated
+  Dart/Rust bridge code over the Rust SDK facade.
+- Generated-code policy: tracked source lives under `bindings/flutter/**`.
+  `mise run sdk:flutter:package` copies that template to
+  `target/sdk/flutter/secure_tunnel_flutter`, runs FRB codegen there, and keeps
+  generated Dart/Rust output untracked.
+- Rust bridge boundary: `bindings/flutter/rust/src/api.rs` depends on
+  `secure-tunnel-sdk` and mirrors the existing generated-binding runtime model:
+  an opaque client owns a Tokio runtime and calls the SDK facade. It does not
+  expose selector, Noise, or transport internals.
+- Dart boundary: `bindings/flutter/lib/src/client.dart` and
+  `bindings/flutter/lib/src/model.dart` provide hand-written fakeable facades
+  over generated FRB APIs. App code imports `secure_tunnel_flutter.dart`, not
+  generated bridge files.
+- Swift/iOS relation: Flutter/Dart is a sibling package over the Rust facade,
+  not a wrapper around the SwiftPM/XCFramework package. The iOS simulator path
+  is operator-only for now and uses the Flutter native-assets package.
+- Tooling note: the hosted native-assets FRB packages currently resolve as
+  `2.13.0-beta.2`, so the repo pins `cargo:flutter_rust_bridge_codegen`,
+  `flutter_rust_bridge`, `flutter_rust_bridge_hooks`, and the Rust crate
+  dependency to that matching version.
+- Validation evidence before independent review:
+  - `mise run sdk:flutter:package` passed.
+  - `SECURE_TUNNEL_FLUTTER_SKIP_PACKAGE=1 mise run sdk:flutter:check-package`
+    passed: generated output layout, untracked target policy, `dart format`,
+    `flutter analyze`, and import/fake smoke.
+  - `SECURE_TUNNEL_FLUTTER_SKIP_PACKAGE=1 mise run sdk:flutter:smoke-package`
+    passed: local binding fixture, QUIC connect, service static key check,
+    account auth, request/response, and graceful close through the Dart facade.
+- Independent review found three medium issues and all were fixed before
+  re-review:
+  - Empty Dart default config now preserves Rust SDK default pinned service
+    static public keys and descriptor trust anchors instead of clearing them.
+  - Dart facade connect/auth/request/close are now `Future`-returning APIs, and
+    FRB network calls are generated as asynchronous calls rather than sync FFI.
+  - `sdk:flutter:smoke-ios-simulator` now runs the generated package test
+    against a named iOS simulator on Darwin instead of exiting successfully
+    after printing manual instructions.
+- Validation evidence after review fix-ups:
+  - `mise run sdk:flutter` passed.
+  - `mise run dev` passed.
+- Re-review outcome: same independent reviewer found no remaining high or
+  medium findings. Residual low risk: no dedicated no-config Dart default
+  smoke variant yet, but static inspection verifies empty Dart pin/trust-anchor
+  lists now preserve Rust SDK defaults.
 
 ## Implementation Plan
 
-1. Compare Flutter Rust Bridge and direct Dart FFI against the Secure Tunnel SDK
+1. [x] Compare Flutter Rust Bridge and direct Dart FFI against the Secure Tunnel SDK
    facade and choose the first bridge path.
-2. Add Flutter/Dart package layout, generated-code policy, and bridge tasks.
-3. Add Dart facade tests and an iOS native smoke path.
-4. Run package validation and independent review.
+2. [x] Add Flutter/Dart package layout, generated-code policy, and bridge tasks.
+3. [x] Add Dart facade tests and an iOS native smoke path.
+4. [x] Run package validation and independent review.
 
 ## Review Notes
 
 ## Acceptance Closure
 
-- [ ] All acceptance criteria are satisfied and marked.
-- [ ] Verification commands and outcomes are recorded.
-- [ ] No unresolved high/medium findings remain.
+- [x] All acceptance criteria are satisfied and marked.
+- [x] Verification commands and outcomes are recorded.
+- [x] No unresolved high/medium findings remain.

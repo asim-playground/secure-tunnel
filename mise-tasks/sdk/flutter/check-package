@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+#MISE description="Check the generated Flutter/Dart SDK package"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+# shellcheck disable=SC1091
+# shellcheck source=common.sh
+source mise-tasks/sdk/flutter/common.sh
+
+if [[ "${SECURE_TUNNEL_FLUTTER_SKIP_PACKAGE:-0}" != "1" ]]; then
+  mise run sdk:flutter:package
+fi
+
+package_root="$(flutter_sdk_package_root)"
+
+test -f "${package_root}/pubspec.yaml"
+test -f "${package_root}/flutter_rust_bridge.yaml"
+test -f "${package_root}/hook/build.dart"
+test -f "${package_root}/lib/secure_tunnel_flutter.dart"
+test -f "${package_root}/lib/src/client.dart"
+test -f "${package_root}/lib/src/model.dart"
+test -f "${package_root}/lib/src/rust/frb_generated.dart"
+test -f "${package_root}/rust/src/frb_generated.rs"
+
+if git ls-files --error-unmatch target/sdk/flutter >/dev/null 2>&1; then
+  echo "Generated Flutter package output under target/sdk/flutter must stay untracked." >&2
+  exit 1
+fi
+
+(
+  cd "${package_root}"
+  dart format --set-exit-if-changed lib test hook
+  flutter analyze
+  flutter test test/import_smoke_test.dart
+)
+
+echo "Flutter SDK package checks passed at ${package_root}"

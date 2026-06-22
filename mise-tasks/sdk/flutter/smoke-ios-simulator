@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+#MISE description="Run operator-only Flutter SDK smoke on an iOS simulator"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+# shellcheck disable=SC1091
+# shellcheck source=../smoke-common.sh
+source mise-tasks/sdk/smoke-common.sh
+# shellcheck disable=SC1091
+# shellcheck source=common.sh
+source mise-tasks/sdk/flutter/common.sh
+
+if [[ "$(uname -s)" != "Darwin" ]]; then
+	echo "Flutter iOS simulator smoke requires macOS." >&2
+	exit 1
+fi
+
+if [[ "${SECURE_TUNNEL_FLUTTER_SKIP_PACKAGE:-0}" != "1" ]]; then
+	mise run sdk:flutter:package
+fi
+
+package_root="$(flutter_sdk_package_root)"
+device="${SECURE_TUNNEL_FLUTTER_IOS_DEVICE:-iPhone}"
+fixture_json="$(mktemp "${TMPDIR:-/tmp}/secure-tunnel-flutter-ios-fixture.XXXXXX.json")"
+trap 'stop_secure_tunnel_fixture; rm -f "${fixture_json}"' EXIT
+
+start_secure_tunnel_fixture "${fixture_json}"
+(
+	cd "${package_root}"
+	SECURE_TUNNEL_FLUTTER_FIXTURE_JSON="${fixture_json}" \
+		flutter test test/session_smoke_test.dart -d "${device}"
+)

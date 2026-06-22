@@ -7,6 +7,9 @@ mise run sdk:check-bindings
 if [[ "$(uname -s)" != MINGW* && "$(uname -s)" != CYGWIN* && "$(uname -s)" != MSYS* ]]; then
   mise run sdk:kotlin
 fi
+if [[ "$(uname -s)" != MINGW* && "$(uname -s)" != CYGWIN* && "$(uname -s)" != MSYS* && "${SECURE_TUNNEL_SKIP_FLUTTER_SDK_TESTS:-0}" != "1" ]]; then
+  mise run sdk:flutter
+fi
 if [[ "$(uname -s)" == "Darwin" && "${SECURE_TUNNEL_SKIP_SWIFT_SDK_TESTS:-0}" != "1" ]]; then
   mise run sdk:swift
 fi

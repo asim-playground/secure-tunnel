@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+#MISE description="Generate the local Flutter/Dart SDK package"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+# shellcheck disable=SC1091
+# shellcheck source=common.sh
+source mise-tasks/sdk/flutter/common.sh
+
+package_root="$(flutter_sdk_package_root)"
+flutter_sdk_remove_under_target "${package_root}"
+mkdir -p "$(dirname "${package_root}")"
+cp -R bindings/flutter "${package_root}"
+
+(
+  cd "${package_root}"
+  "$(flutter_sdk_codegen_bin)" generate --config-file flutter_rust_bridge.yaml
+  flutter pub get
+)
+
+echo "Flutter SDK package generated at ${package_root}"

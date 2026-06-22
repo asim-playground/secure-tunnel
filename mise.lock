@@ -210,6 +210,10 @@ backend = "cargo:cargo-watch"
 version = "0.29.4"
 backend = "cargo:cbindgen"
 
+[[tools."cargo:flutter_rust_bridge_codegen"]]
+version = "2.13.0-beta.2"
+backend = "cargo:flutter_rust_bridge_codegen"
+
 [[tools."cargo:leptosfmt"]]
 version = "0.1.33"
 backend = "cargo:leptosfmt"
@@ -265,6 +269,10 @@ url = "https://github.com/sharkdp/fd/releases/download/v10.4.2/fd-v10.4.2-x86_64
 [tools.fd."platforms.windows-x64-baseline"]
 checksum = "sha256:b2816e506390a89941c63c9187d58a3cc10e9a55f2ef0685f9ea0eccaf7c98c8"
 url = "https://github.com/sharkdp/fd/releases/download/v10.4.2/fd-v10.4.2-x86_64-pc-windows-msvc.zip"
+
+[[tools.flutter]]
+version = "3.44.0-stable"
+backend = "asdf:flutter"
 
 [[tools."github:WebAssembly/wabt"]]
 version = "1.0.41"
