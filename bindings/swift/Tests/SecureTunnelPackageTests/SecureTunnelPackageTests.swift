@@ -29,6 +29,12 @@ final class SecureTunnelPackageTests: XCTestCase {
         let defaults = defaultClientConfig()
         let config = ClientConfig(
             quicReprobeDelaySeconds: 300,
+            connectTimeoutMs: defaults.connectTimeoutMs,
+            quicConnectTimeoutMs: defaults.quicConnectTimeoutMs,
+            wssConnectTimeoutMs: defaults.wssConnectTimeoutMs,
+            secureReadyTimeoutMs: defaults.secureReadyTimeoutMs,
+            recordReadTimeoutMs: defaults.recordReadTimeoutMs,
+            recordWriteTimeoutMs: defaults.recordWriteTimeoutMs,
             outerRootCertificatesDer: try fixture.outerRootCertificatesDerB64.map(decodeBase64),
             descriptorTrustAnchors: defaults.descriptorTrustAnchors,
             pinnedServiceStaticPublicKeys: try fixture.pinnedServiceStaticPublicKeysB64

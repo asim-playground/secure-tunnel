@@ -65,6 +65,9 @@ pub enum ApiError {
     /// The selector observed an impossible state transition.
     #[error("transport selector invariant violated: {0}")]
     TransportSelectorInvariant(&'static str),
+    /// The caller cancelled an in-flight operation.
+    #[error("operation cancelled")]
+    OperationCancelled,
     /// The framed transport is already closed.
     #[error("framed transport is closed")]
     TransportClosed,

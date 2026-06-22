@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+#MISE description="List cargo-mutants candidates for security-critical Rust files"
+set -euo pipefail
+
+cargo mutants --list --json \
+  -f crates/sdk/src/client.rs \
+  -f crates/transport/src/quic.rs \
+  -f crates/transport/src/wss.rs \
+  -f crates/transport/src/framing.rs

@@ -32,6 +32,12 @@ pub fn sdk_config(config: ClientConfig) -> FfiResult<secure_tunnel_sdk::ClientCo
     Ok(secure_tunnel_sdk::ClientConfig {
         transport_policy: secure_tunnel_sdk::TransportPolicyConfig {
             quic_reprobe_delay_seconds: config.quic_reprobe_delay_seconds,
+            connect_timeout_ms: config.connect_timeout_ms,
+            quic_connect_timeout_ms: config.quic_connect_timeout_ms,
+            wss_connect_timeout_ms: config.wss_connect_timeout_ms,
+            secure_ready_timeout_ms: config.secure_ready_timeout_ms,
+            record_read_timeout_ms: config.record_read_timeout_ms,
+            record_write_timeout_ms: config.record_write_timeout_ms,
         },
         outer_root_certificates_der: outer_roots,
         descriptor_trust_anchors: config

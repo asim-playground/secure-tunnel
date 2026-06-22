@@ -63,9 +63,15 @@ pub fn normalize_descriptor_json(descriptor_json: String) -> FfiResult<String> {
 /// Returns a default generated-binding client configuration.
 #[must_use]
 pub fn default_client_config() -> ClientConfig {
+    let policy = secure_tunnel_sdk::TransportPolicyConfig::default();
     ClientConfig {
-        quic_reprobe_delay_seconds: secure_tunnel_sdk::TransportPolicyConfig::default()
-            .quic_reprobe_delay_seconds,
+        quic_reprobe_delay_seconds: policy.quic_reprobe_delay_seconds,
+        connect_timeout_ms: policy.connect_timeout_ms,
+        quic_connect_timeout_ms: policy.quic_connect_timeout_ms,
+        wss_connect_timeout_ms: policy.wss_connect_timeout_ms,
+        secure_ready_timeout_ms: policy.secure_ready_timeout_ms,
+        record_read_timeout_ms: policy.record_read_timeout_ms,
+        record_write_timeout_ms: policy.record_write_timeout_ms,
         outer_root_certificates_der: Vec::new(),
         descriptor_trust_anchors: secure_tunnel_core::example_descriptor_trust_anchors()
             .into_iter()
@@ -93,6 +99,8 @@ mod tests {
     fn facade_helpers_expose_stable_sdk_defaults() {
         let config = default_client_config();
         assert_eq!(config.quic_reprobe_delay_seconds, 300);
+        assert_eq!(config.quic_connect_timeout_ms, 2_000);
+        assert_eq!(config.secure_ready_timeout_ms, 3_000);
         assert_eq!(config.descriptor_trust_anchors.len(), 1);
         assert_eq!(config.descriptor_trust_anchors[0].algorithm, "ed25519");
         assert_eq!(config.pinned_service_static_public_keys.len(), 1);

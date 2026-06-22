@@ -9,11 +9,11 @@ use std::future::Future;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use futures::executor::block_on;
 use futures::pin_mut;
 use futures::task::noop_waker_ref;
 
 mod mock;
+mod security;
 
 use crate::client::SecureTunnelClient;
 use crate::error::{ConnectError, SdkErrorKind};
@@ -242,7 +242,7 @@ fn known_device_authentication_consumes_pending_challenge() {
     let ports = Arc::new(MockPorts::quic_success_with_receives([
         Some(account_result(AccountFreshness::Fresh)),
         Some(device_auth_challenge()),
-        Some(device_auth_result()),
+        Some(device_auth_result_for("device-ed25519-1")),
     ]));
     let client = SecureTunnelClient::with_ports(ClientConfig::default(), ports.clone());
     let descriptor = example_descriptor();
@@ -456,10 +456,6 @@ fn device_auth_challenge() -> Vec<u8> {
     .unwrap()
 }
 
-fn device_auth_result() -> Vec<u8> {
-    device_auth_result_for("device-ed25519-1")
-}
-
 fn device_auth_result_for(device_key_id: &str) -> Vec<u8> {
     secure_tunnel_core::DeviceResult {
         device_key_id: device_key_id.to_owned(),
@@ -488,4 +484,15 @@ fn connect_error_value<T>(result: crate::ConnectResult<T>) -> ConnectError {
         Ok(_) => panic!("expected Err"),
         Err(error) => error,
     }
+}
+
+fn block_on<T>(future: impl Future<Output = T>) -> T {
+    let runtime = match tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(error) => panic!("test runtime builds: {error}"),
+    };
+    runtime.block_on(future)
 }

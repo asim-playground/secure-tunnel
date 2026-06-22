@@ -34,6 +34,12 @@ fun main() {
     val defaults = defaultClientConfig()
     val config = ClientConfig(
         quicReprobeDelaySeconds = 300u,
+        connectTimeoutMs = defaults.connectTimeoutMs,
+        quicConnectTimeoutMs = defaults.quicConnectTimeoutMs,
+        wssConnectTimeoutMs = defaults.wssConnectTimeoutMs,
+        secureReadyTimeoutMs = defaults.secureReadyTimeoutMs,
+        recordReadTimeoutMs = defaults.recordReadTimeoutMs,
+        recordWriteTimeoutMs = defaults.recordWriteTimeoutMs,
         outerRootCertificatesDer = decodeMany(fixture.required("outer_root_certificates_der_b64")),
         descriptorTrustAnchors = defaults.descriptorTrustAnchors,
         pinnedServiceStaticPublicKeys = decodeMany(

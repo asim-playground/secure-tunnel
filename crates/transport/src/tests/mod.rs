@@ -197,6 +197,71 @@ async fn oversized_wss_message_fails_at_adapter_limit() -> TestResult<()> {
 }
 
 #[tokio::test]
+async fn stalled_wss_secure_ready_is_bounded_by_record_timeout() -> TestResult<()> {
+    let wss = WssServer::start_stalled_after_websocket().await?;
+    let connector = WssConnector::new(
+        TransportClientConfig::with_root_certificate_der(vec![wss.root_certificate_der()])
+            .with_timeouts(crate::TransportClientTimeouts {
+                quic_connect: std::time::Duration::from_millis(100),
+                wss_connect: std::time::Duration::from_millis(100),
+                record_read: std::time::Duration::from_millis(20),
+                record_write: std::time::Duration::from_millis(100),
+            }),
+    );
+    let target = TransportTarget::Wss(secure_tunnel_core::WssTarget {
+        url: format!("wss://127.0.0.1:{}/tunnel", wss.port()),
+        subprotocol: WSS_SUBPROTOCOL_V1.to_owned(),
+        authority_override: None,
+    });
+
+    let mut transport = connector.connect(&target).await?;
+    let started = std::time::Instant::now();
+    let Err(error) = transport.receive_record().await else {
+        panic!("stalled WSS secure-ready read should time out");
+    };
+
+    assert_eq!(error, ApiError::TransportClosed);
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(1),
+        "stalled WSS record reads must be bounded"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn wss_control_frames_do_not_extend_record_read_timeout() -> TestResult<()> {
+    let wss = WssServer::start_pinging_after_websocket().await?;
+    let connector = WssConnector::new(
+        TransportClientConfig::with_root_certificate_der(vec![wss.root_certificate_der()])
+            .with_timeouts(crate::TransportClientTimeouts {
+                quic_connect: std::time::Duration::from_millis(100),
+                wss_connect: std::time::Duration::from_millis(100),
+                record_read: std::time::Duration::from_millis(20),
+                record_write: std::time::Duration::from_millis(100),
+            }),
+    );
+    let target = TransportTarget::Wss(secure_tunnel_core::WssTarget {
+        url: format!("wss://127.0.0.1:{}/tunnel", wss.port()),
+        subprotocol: WSS_SUBPROTOCOL_V1.to_owned(),
+        authority_override: None,
+    });
+
+    let mut transport = connector.connect(&target).await?;
+    let result = tokio::time::timeout(
+        std::time::Duration::from_millis(200),
+        transport.receive_record(),
+    )
+    .await
+    .expect("logical record read timeout should fire before test timeout");
+    let Err(error) = result else {
+        panic!("ping-only WSS stream should time out before any record arrives");
+    };
+
+    assert_eq!(error, ApiError::TransportClosed);
+    Ok(())
+}
+
+#[tokio::test]
 async fn inner_trust_failure_does_not_fallback_to_wss() -> TestResult<()> {
     let fixture = ServiceFixture::new()?;
     let quic = QuicServer::start(

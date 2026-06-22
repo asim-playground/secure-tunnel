@@ -8,6 +8,8 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use tokio::sync::Notify;
+
 /// Cooperative cancellation handle for long-running connect operations.
 ///
 /// Foreign callers can keep a clone of this handle and call [`Self::cancel`]
@@ -17,6 +19,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 #[derive(Debug, Clone, Default)]
 pub struct CancellationHandle {
     cancelled: Arc<AtomicBool>,
+    notify: Arc<Notify>,
 }
 
 impl CancellationHandle {
@@ -29,11 +32,24 @@ impl CancellationHandle {
     /// Requests cooperative cancellation for operations using this handle.
     pub fn cancel(&self) {
         self.cancelled.store(true, Ordering::SeqCst);
+        self.notify.notify_waiters();
     }
 
     /// Returns whether cancellation has been requested.
     #[must_use]
     pub fn is_cancelled(&self) -> bool {
         self.cancelled.load(Ordering::SeqCst)
+    }
+
+    pub(crate) async fn cancelled(&self) {
+        while !self.is_cancelled() {
+            let notified = self.notify.notified();
+            tokio::pin!(notified);
+            let _ = notified.as_mut().enable();
+            if self.is_cancelled() {
+                return;
+            }
+            notified.await;
+        }
     }
 }

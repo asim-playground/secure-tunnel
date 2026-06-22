@@ -153,6 +153,7 @@ impl SdkError {
                 format!("transport selection exhausted after `{reason}`"),
             ),
             ApiError::TransportSelectorInvariant(message) => Self::internal(*message),
+            ApiError::OperationCancelled => Self::cancelled(),
             ApiError::TransportClosed => Self::closed(),
         }
     }

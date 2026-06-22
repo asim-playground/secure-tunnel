@@ -6,6 +6,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use quinn::crypto::rustls::QuicClientConfig;
 use rustls::crypto::ring::default_provider;
@@ -23,16 +24,31 @@ pub struct TransportClientConfig {
     root_certificates_der: Option<Vec<Vec<u8>>>,
     descriptor_trust_anchors: Vec<TrustAnchor>,
     pinned_service_static_public_keys: Vec<NoisePublicKey>,
+    timeouts: TransportClientTimeouts,
+}
+
+/// Timeout budgets enforced by production carrier adapters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TransportClientTimeouts {
+    /// Budget for `QUIC` DNS, handshake, and stream-open phases.
+    pub quic_connect: Duration,
+    /// Budget for the `WSS` TCP/TLS/WebSocket handshake.
+    pub wss_connect: Duration,
+    /// Budget for one framed record read.
+    pub record_read: Duration,
+    /// Budget for one framed record write.
+    pub record_write: Duration,
 }
 
 impl TransportClientConfig {
     /// Creates a configuration that verifies certificates with the platform.
     #[must_use]
-    pub const fn platform_verifier() -> Self {
+    pub fn platform_verifier() -> Self {
         Self {
             root_certificates_der: None,
             descriptor_trust_anchors: Vec::new(),
             pinned_service_static_public_keys: Vec::new(),
+            timeouts: TransportClientTimeouts::default(),
         }
     }
 
@@ -41,11 +57,12 @@ impl TransportClientConfig {
     /// This is mainly used by local integration tests until the SDK-facing
     /// custom-CA configuration lands in task `00000013`.
     #[must_use]
-    pub const fn with_root_certificate_der(root_certificates_der: Vec<Vec<u8>>) -> Self {
+    pub fn with_root_certificate_der(root_certificates_der: Vec<Vec<u8>>) -> Self {
         Self {
             root_certificates_der: Some(root_certificates_der),
             descriptor_trust_anchors: Vec::new(),
             pinned_service_static_public_keys: Vec::new(),
+            timeouts: TransportClientTimeouts::default(),
         }
     }
 
@@ -61,6 +78,17 @@ impl TransportClientConfig {
     pub fn with_pinned_service_static_public_keys(mut self, keys: Vec<NoisePublicKey>) -> Self {
         self.pinned_service_static_public_keys = keys;
         self
+    }
+
+    /// Sets the adapter timeout budgets.
+    #[must_use]
+    pub const fn with_timeouts(mut self, timeouts: TransportClientTimeouts) -> Self {
+        self.timeouts = timeouts;
+        self
+    }
+
+    pub(crate) const fn timeouts(&self) -> TransportClientTimeouts {
+        self.timeouts
     }
 
     pub(crate) fn descriptor_trust_anchors(&self) -> Vec<TrustAnchor> {
@@ -103,6 +131,18 @@ impl Default for TransportClientConfig {
             root_certificates_der: None,
             descriptor_trust_anchors: example_descriptor_trust_anchors(),
             pinned_service_static_public_keys: vec![obfuscated_service_static_public_key()],
+            timeouts: TransportClientTimeouts::default(),
+        }
+    }
+}
+
+impl Default for TransportClientTimeouts {
+    fn default() -> Self {
+        Self {
+            quic_connect: Duration::from_secs(2),
+            wss_connect: Duration::from_secs(5),
+            record_read: Duration::from_secs(30),
+            record_write: Duration::from_secs(30),
         }
     }
 }

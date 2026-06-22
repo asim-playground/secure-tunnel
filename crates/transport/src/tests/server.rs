@@ -176,6 +176,70 @@ impl WssServer {
         })
     }
 
+    pub(super) async fn start_stalled_after_websocket() -> TestResult<Self> {
+        let certificate = TlsFixture::new()?;
+        let server_config = wss_server_config(&certificate)?;
+        let acceptor = TlsAcceptor::from(Arc::new(server_config));
+        let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0))).await?;
+        let port = listener.local_addr()?.port();
+        let connection_count = Arc::new(AtomicUsize::new(0));
+        let task_count = Arc::clone(&connection_count);
+        let task = tokio::spawn(async move {
+            loop {
+                let Ok((stream, _peer)) = listener.accept().await else {
+                    break;
+                };
+                let acceptor = acceptor.clone();
+                let task_count = Arc::clone(&task_count);
+                tokio::spawn(async move {
+                    if let Ok(tls) = acceptor.accept(stream).await {
+                        task_count.fetch_add(1, Ordering::SeqCst);
+                        let _ = Box::pin(handle_stalled_wss_connection(tls)).await;
+                    }
+                });
+            }
+        });
+
+        Ok(Self {
+            port,
+            certificate,
+            connection_count,
+            task,
+        })
+    }
+
+    pub(super) async fn start_pinging_after_websocket() -> TestResult<Self> {
+        let certificate = TlsFixture::new()?;
+        let server_config = wss_server_config(&certificate)?;
+        let acceptor = TlsAcceptor::from(Arc::new(server_config));
+        let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0))).await?;
+        let port = listener.local_addr()?.port();
+        let connection_count = Arc::new(AtomicUsize::new(0));
+        let task_count = Arc::clone(&connection_count);
+        let task = tokio::spawn(async move {
+            loop {
+                let Ok((stream, _peer)) = listener.accept().await else {
+                    break;
+                };
+                let acceptor = acceptor.clone();
+                let task_count = Arc::clone(&task_count);
+                tokio::spawn(async move {
+                    if let Ok(tls) = acceptor.accept(stream).await {
+                        task_count.fetch_add(1, Ordering::SeqCst);
+                        let _ = Box::pin(handle_pinging_wss_connection(tls)).await;
+                    }
+                });
+            }
+        });
+
+        Ok(Self {
+            port,
+            certificate,
+            connection_count,
+            task,
+        })
+    }
+
     pub(super) const fn port(&self) -> u16 {
         self.port
     }
@@ -277,6 +341,37 @@ where
         ))
         .await
         .map_err(|_| secure_tunnel_core::ApiError::TransportClosed)
+}
+
+async fn handle_stalled_wss_connection<S>(stream: S) -> ApiResult<()>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    let _websocket = accept_hdr_async(stream, select_wss_subprotocol)
+        .await
+        .map_err(|_| {
+            secure_tunnel_core::ApiError::OuterProtocolFailure(secure_tunnel_core::CarrierKind::Wss)
+        })?;
+    std::future::pending::<()>().await;
+    Ok(())
+}
+
+async fn handle_pinging_wss_connection<S>(stream: S) -> ApiResult<()>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    let mut websocket = accept_hdr_async(stream, select_wss_subprotocol)
+        .await
+        .map_err(|_| {
+            secure_tunnel_core::ApiError::OuterProtocolFailure(secure_tunnel_core::CarrierKind::Wss)
+        })?;
+    loop {
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        websocket
+            .send(Message::Ping(Vec::new().into()))
+            .await
+            .map_err(|_| secure_tunnel_core::ApiError::TransportClosed)?;
+    }
 }
 
 #[allow(clippy::result_large_err, clippy::unnecessary_wraps)]

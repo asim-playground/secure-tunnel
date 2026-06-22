@@ -13,7 +13,7 @@ superseded_by: []
 - Status: `draft`
 - Owner: `Asim Ihsan`
 - Related Plans: `plan-00000001`
-- Related Tasks: `task-00000007, task-00000008, task-00000009, task-00000013, task-00000014, task-00000017, task-00000018, task-00000019, task-00000020, task-00000021, task-00000022, task-00000023, task-00000024, task-00000025, task-00000026, task-00000027, task-00000028, task-00000029, task-00000030`
+- Related Tasks: `task-00000007, task-00000008, task-00000009, task-00000013, task-00000014, task-00000017, task-00000018, task-00000019, task-00000020, task-00000021, task-00000022, task-00000023, task-00000024, task-00000025, task-00000026, task-00000027, task-00000028, task-00000029, task-00000030, task-00000031`
 
 ## Summary
 
@@ -117,6 +117,7 @@ Rust facade and behavior.
   - `/Users/asimi/Downloads/references/dart-native`
   - `/Users/asimi/Downloads/references/cbindgen`
   - `/Users/asimi/Downloads/references/pyo3`
+  - `/Users/asimi/Downloads/references/cargo-mutants`
   - `/Users/asimi/workplace/codesuper`
 
 ## Gap Analysis
@@ -256,6 +257,7 @@ Rust facade and behavior.
     - `task-00000013` `allow optional custom ca cert for intercepted wss or quic`
     - `task-00000014` `allow optional http proxy for wss client`
     - `task-00000022` `add observability and conformance test matrix`
+    - `task-00000031` `security hardening pass`
 - Exit Criteria:
     - [ ] custom outer-TLS CA configuration works without weakening inner Noise
           trust.
@@ -263,6 +265,8 @@ Rust facade and behavior.
           security model.
     - [ ] events and metrics distinguish outer path failure, outer TLS/proxy
           failure, fallback, inner trust failure, session failure, and close.
+    - [ ] production connect, secure-ready, record read/write, and
+          cancellation paths are bounded and covered by adversarial tests.
 
 ### Phase 3 - `generate the common SDK bindings`
 
@@ -340,6 +344,7 @@ Rust facade and behavior.
 | task-`00000013` | `allow optional custom ca cert for intercepted wss or quic` | `Phase 2` | `task-00000009, task-00000012, task-00000019` | `proposed` |
 | task-`00000014` | `allow optional http proxy for wss client` | `Phase 2` | `task-00000009, task-00000012, task-00000013, task-00000019` | `proposed` |
 | task-`00000022` | `add observability and conformance test matrix` | `Phase 2` | `task-00000009, task-00000021` | `completed` |
+| task-`00000031` | `security hardening pass` | `Phase 2` | `task-00000019, task-00000021, task-00000022, task-00000023, task-00000024, task-00000026, task-00000030` | `completed` |
 | task-`00000023` | `create uniffi sdk facade and bindgen tooling` | `Phase 3` | `task-00000018, task-00000021, task-00000022` | `completed` |
 | task-`00000024` | `package swift sdk as swiftpm and xcframework` | `Phase 4` | `task-00000022, task-00000023` | `completed` |
 | task-`00000025` | `package kotlin sdk as jvm or android artifact` | `Phase 4` | `task-00000022, task-00000023` | `proposed` |
@@ -370,6 +375,9 @@ Rust facade and behavior.
 - Regression safeguards: signed descriptor fixtures, service-static-key pin
   fixtures, fallback/failure snapshots, generated-binding API checks, and
   package artifact checksums.
+- Security hardening: `mise run security:test`, cargo-mutants candidate
+  listing/smoke shards for security-critical Rust files, and future fuzz
+  targets for descriptor/framing/application parsers.
 - Definition of Done:
     - [ ] Phase 0 foundation tasks are closed or explicitly refreshed.
     - [ ] Rust library can run the end-to-end local secure tunnel scenario.
@@ -394,6 +402,7 @@ Rust facade and behavior.
 | Flutter/Dart package drifts from native SDK behavior | Dart bridge exposes a different API shape from the Rust SDK facade | keep generated bridge code behind hand-written Dart facades and shared fixture tests | Asim Ihsan |
 | Go SDK memory ownership bugs appear | manual C ABI grows without drift and cleanup checks | keep C ABI narrow, use cbindgen drift checks, and test allocation/error cleanup paths | Asim Ihsan |
 | Managed-network support weakens inner trust semantics | custom CA or proxy code is treated as security trust | keep outer TLS/proxy config separate from inner Noise trust in API, tests, and docs | Asim Ihsan |
+| Availability bugs block fallback or cancellation | malicious endpoint stalls DNS/connect/open/read/secure-ready | typed timeout policy, cancellation-aware selection, stalled-peer tests, and STRIDE review | Asim Ihsan |
 
 ## Open Questions
 
@@ -417,7 +426,7 @@ Rust facade and behavior.
 3. Start `task-00000028` and `task-00000029` after Kotlin package smoke parity,
    keeping Flutter/Dart and native Go on the same fixture semantics as Swift,
    Kotlin, Python, and Rust-client/FastAPI smokes.
-4. Keep `task-00000013` and `task-00000014` queued for managed-network support
+5. Keep `task-00000013` and `task-00000014` queued for managed-network support
    before declaring the SDK broadly production-ready.
 
 ## Implementation Notes
@@ -495,6 +504,13 @@ Rust facade and behavior.
   config into Rust process environment for `tracing_subscriber` stderr logs,
   `RUST_LOG`, OTLP endpoint variables, service name, and resource attributes,
   while CLI stdout remains reserved for machine-readable JSON.
+- `2026-06-21`: Added `task-00000031` for security hardening. It covers
+  production timeout/cancellation policy, STRIDE documentation, stalled-peer
+  regression tests, and cargo-mutants security-critical file discovery.
+- `2026-06-21`: Completed `task-00000031` with typed timeout budgets,
+  cancellation/deadline-aware selector inputs, bounded WSS logical record
+  reads, STRIDE documentation, hardening tests, and cargo-mutants smoke/list
+  automation.
 
 ## Completion Checklist
 
@@ -524,3 +540,5 @@ Rust facade and behavior.
 - `2026-06-21` `Completed task 00000026 with a maturin UniFFI Python package, secure_tunnel wrapper, compatibility aliases, wheel/import checks, and Python package session smoke.`
 - `2026-06-21` `Completed task 00000030 with a FastAPI fixture shell over the Rust binding fixture, a Rust binding-fixture-client command, and Rust-client-to-Python-FastAPI e2e smoke in mise run dev.`
 - `2026-06-21` `Review and user-request follow-up: added Python dataclass/StrEnum server configuration, server optional extra wheel coverage, timeout-safe fixture startup cleanup, and Rust CLI tracing-subscriber configuration from Python-provided environment.`
+- `2026-06-21` `Added task 00000031 for timeout/cancellation security hardening, STRIDE review, stalled-peer regressions, and cargo-mutants automation.`
+- `2026-06-21` `Completed task 00000031 after independent review and re-review; final validation included mise run dev, security:test, sdk:check-bindings, cargo-mutants list, and cargo-mutants smoke.`

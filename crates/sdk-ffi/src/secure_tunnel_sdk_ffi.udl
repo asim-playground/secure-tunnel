@@ -77,6 +77,12 @@ enum CloseClassification {
 
 dictionary ClientConfig {
   u64 quic_reprobe_delay_seconds;
+  u64 connect_timeout_ms;
+  u64 quic_connect_timeout_ms;
+  u64 wss_connect_timeout_ms;
+  u64 secure_ready_timeout_ms;
+  u64 record_read_timeout_ms;
+  u64 record_write_timeout_ms;
   sequence<bytes> outer_root_certificates_der;
   sequence<DescriptorTrustAnchor> descriptor_trust_anchors;
   sequence<bytes> pinned_service_static_public_keys;

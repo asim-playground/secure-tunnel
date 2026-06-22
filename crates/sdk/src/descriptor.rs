@@ -80,12 +80,30 @@ impl BootstrapDescriptor {
 pub struct TransportPolicyConfig {
     /// Seconds to wait before retrying `QUIC` after a fallback-eligible failure.
     pub quic_reprobe_delay_seconds: u64,
+    /// Milliseconds allowed for the full transport selection and secure-ready path.
+    pub connect_timeout_ms: u64,
+    /// Milliseconds allowed for `QUIC` DNS, handshake, and stream-open phases.
+    pub quic_connect_timeout_ms: u64,
+    /// Milliseconds allowed for the `WSS` TCP/TLS/WebSocket handshake.
+    pub wss_connect_timeout_ms: u64,
+    /// Milliseconds allowed for inner secure-ready evaluation per candidate.
+    pub secure_ready_timeout_ms: u64,
+    /// Milliseconds allowed for one framed record read.
+    pub record_read_timeout_ms: u64,
+    /// Milliseconds allowed for one framed record write.
+    pub record_write_timeout_ms: u64,
 }
 
 impl Default for TransportPolicyConfig {
     fn default() -> Self {
         Self {
             quic_reprobe_delay_seconds: 300,
+            connect_timeout_ms: 10_000,
+            quic_connect_timeout_ms: 2_000,
+            wss_connect_timeout_ms: 5_000,
+            secure_ready_timeout_ms: 3_000,
+            record_read_timeout_ms: 30_000,
+            record_write_timeout_ms: 30_000,
         }
     }
 }

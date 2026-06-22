@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+#MISE description="Run security hardening regression tests"
+set -euo pipefail
+
+cargo nextest run -p secure-tunnel-sdk --all-features \
+  cancellation_interrupts_pending_selector \
+  secure_ready_timeout_falls_back_to_wss \
+  connect_timeout_bounds_selector_without_cancellation \
+  cancellation_after_quic_fallback_preserves_attempts \
+  connect_timeout_after_quic_fallback_preserves_wss_attempt
+
+cargo nextest run -p secure-tunnel-transport --all-features \
+  stalled_wss_secure_ready_is_bounded_by_record_timeout \
+  wss_control_frames_do_not_extend_record_read_timeout \
+  oversized_wss_message_fails_at_adapter_limit

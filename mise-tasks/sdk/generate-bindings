@@ -51,7 +51,7 @@ out_dir="${abs_out_dir}"
 mkdir -p "${out_dir}/swift" "${out_dir}/kotlin" "${out_dir}/python"
 
 for language in swift kotlin python; do
-  cargo run -p secure-tunnel-uniffi-bindgen -- generate "${ffi_lib}" \
+  cargo run -p secure-tunnel-uniffi-bindgen --bin secure-tunnel-uniffi-bindgen -- generate "${ffi_lib}" \
     --crate secure_tunnel_sdk_ffi \
     --language "${language}" \
     --out-dir "${out_dir}/${language}" \

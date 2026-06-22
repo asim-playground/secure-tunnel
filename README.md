@@ -76,6 +76,9 @@ Secure Tunnel is a multi-platform Rust project with:
 - `mise run rust:outdated` - Report outdated dependencies
 - `mise run rust:insta-test` - Exercise snapshot assertions
 - `mise run rust:insta-review` - Review pending snapshot updates
+- `mise run security:test` - Run timeout, cancellation, and stalled-peer hardening tests
+- `mise run security:mutants-list` - List mutation-test candidates in security-critical Rust files
+- `mise run security:mutants-smoke` - Run a small opt-in cargo-mutants smoke shard
 
 ### Project Structure
 

@@ -122,6 +122,18 @@ pub enum CloseClassification {
 pub struct ClientConfig {
     /// Seconds before retrying `QUIC` after fallback.
     pub quic_reprobe_delay_seconds: u64,
+    /// Milliseconds allowed for the full connect attempt.
+    pub connect_timeout_ms: u64,
+    /// Milliseconds allowed for `QUIC` carrier setup phases.
+    pub quic_connect_timeout_ms: u64,
+    /// Milliseconds allowed for the `WSS` handshake.
+    pub wss_connect_timeout_ms: u64,
+    /// Milliseconds allowed for secure-ready evaluation.
+    pub secure_ready_timeout_ms: u64,
+    /// Milliseconds allowed for one framed read.
+    pub record_read_timeout_ms: u64,
+    /// Milliseconds allowed for one framed write.
+    pub record_write_timeout_ms: u64,
     /// DER-encoded outer TLS roots.
     pub outer_root_certificates_der: Vec<Vec<u8>>,
     /// Pinned descriptor roots that may authorize service descriptors.

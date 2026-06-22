@@ -17,6 +17,7 @@
 mod auth;
 mod cancellation;
 mod client;
+mod deadline;
 mod descriptor;
 mod error;
 mod observability;

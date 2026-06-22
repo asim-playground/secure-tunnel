@@ -31,6 +31,12 @@ def main() -> int:
     defaults = st.default_client_config()
     config = st.ClientConfig(
         quic_reprobe_delay_seconds=300,
+        connect_timeout_ms=defaults.connect_timeout_ms,
+        quic_connect_timeout_ms=defaults.quic_connect_timeout_ms,
+        wss_connect_timeout_ms=defaults.wss_connect_timeout_ms,
+        secure_ready_timeout_ms=defaults.secure_ready_timeout_ms,
+        record_read_timeout_ms=defaults.record_read_timeout_ms,
+        record_write_timeout_ms=defaults.record_write_timeout_ms,
         outer_root_certificates_der=_decode_many(
             fixture["outer_root_certificates_der_b64"],
         ),

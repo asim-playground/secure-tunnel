@@ -10,6 +10,7 @@ use secure_tunnel_core::{
     ApiError, ApiResult, BoxFuture, CarrierConnector, CarrierKind, CloseDirective, FramedDuplex,
     MAX_RECORD_PAYLOAD_SIZE, TransportTarget,
 };
+use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::tungstenite::http::header::{HOST, SEC_WEBSOCKET_PROTOCOL};
@@ -75,14 +76,19 @@ impl CarrierConnector for WssConnector {
                 );
             }
 
+            let timeouts = self.config.timeouts();
             let connector = Connector::Rustls(self.config.wss_client_config()?);
-            let (stream, response) = Box::pin(connect_async_tls_with_config(
-                request,
-                Some(websocket_config()),
-                false,
-                Some(connector),
-            ))
+            let (stream, response) = timeout(
+                timeouts.wss_connect,
+                Box::pin(connect_async_tls_with_config(
+                    request,
+                    Some(websocket_config()),
+                    false,
+                    Some(connector),
+                )),
+            )
             .await
+            .map_err(|_| ApiError::OuterPathFailure(CarrierKind::Wss))?
             .map_err(|error| map_wss_connect_error(&error))?;
             validate_selected_subprotocol(&response, &target.subprotocol)?;
             tracing::debug!(
@@ -91,7 +97,11 @@ impl CarrierConnector for WssConnector {
                 phase = "connect_ready"
             );
 
-            Ok(Box::new(WssFramedDuplex { stream }) as Box<dyn FramedDuplex>)
+            Ok(Box::new(WssFramedDuplex {
+                stream,
+                read_timeout: timeouts.record_read,
+                write_timeout: timeouts.record_write,
+            }) as Box<dyn FramedDuplex>)
         })
     }
 }
@@ -144,6 +154,8 @@ const fn map_wss_connect_error(error: &tokio_tungstenite::tungstenite::Error) ->
 
 struct WssFramedDuplex {
     stream: WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>,
+    read_timeout: std::time::Duration,
+    write_timeout: std::time::Duration,
 }
 
 impl FramedDuplex for WssFramedDuplex {
@@ -154,31 +166,21 @@ impl FramedDuplex for WssFramedDuplex {
     fn send_record<'a>(&'a mut self, record: &'a [u8]) -> BoxFuture<'a, ApiResult<()>> {
         Box::pin(async move {
             validate_outbound_record(record)?;
-            self.stream
-                .send(Message::Binary(record.to_vec().into()))
-                .await
-                .map_err(|error| map_wss_runtime_error(&error))
+            timeout(
+                self.write_timeout,
+                self.stream.send(Message::Binary(record.to_vec().into())),
+            )
+            .await
+            .map_err(|_| ApiError::TransportClosed)?
+            .map_err(|error| map_wss_runtime_error(&error))
         })
     }
 
     fn receive_record(&mut self) -> BoxFuture<'_, ApiResult<Option<Vec<u8>>>> {
         Box::pin(async move {
-            loop {
-                let Some(message) = self.stream.next().await else {
-                    return Ok(None);
-                };
-                match message.map_err(|error| map_wss_runtime_error(&error))? {
-                    Message::Binary(payload) => {
-                        validate_inbound_record(&payload, CarrierKind::Wss)?;
-                        return Ok(Some(payload.to_vec()));
-                    }
-                    Message::Text(_) => {
-                        return Err(ApiError::OuterProtocolFailure(CarrierKind::Wss));
-                    }
-                    Message::Close(_) => return Ok(None),
-                    Message::Ping(_) | Message::Pong(_) | Message::Frame(_) => {}
-                }
-            }
+            timeout(self.read_timeout, receive_wss_record(&mut self.stream))
+                .await
+                .map_err(|_| ApiError::TransportClosed)?
         })
     }
 
@@ -196,6 +198,25 @@ impl FramedDuplex for WssFramedDuplex {
     }
 }
 
+async fn receive_wss_record(
+    stream: &mut WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>,
+) -> ApiResult<Option<Vec<u8>>> {
+    loop {
+        let Some(message) = stream.next().await else {
+            return Ok(None);
+        };
+        match message.map_err(|error| map_wss_runtime_error(&error))? {
+            Message::Binary(payload) => {
+                validate_inbound_record(&payload, CarrierKind::Wss)?;
+                return Ok(Some(payload.to_vec()));
+            }
+            Message::Text(_) => return Err(ApiError::OuterProtocolFailure(CarrierKind::Wss)),
+            Message::Close(_) => return Ok(None),
+            Message::Ping(_) | Message::Pong(_) | Message::Frame(_) => {}
+        }
+    }
+}
+
 const fn map_wss_runtime_error(error: &tokio_tungstenite::tungstenite::Error) -> ApiError {
     use tokio_tungstenite::tungstenite::Error;
 
@@ -203,5 +224,42 @@ const fn map_wss_runtime_error(error: &tokio_tungstenite::tungstenite::Error) ->
         Error::ConnectionClosed | Error::AlreadyClosed | Error::Io(_) => ApiError::TransportClosed,
         Error::Tls(_) => ApiError::OuterTlsFailure(CarrierKind::Wss),
         _ => ApiError::OuterProtocolFailure(CarrierKind::Wss),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio_tungstenite::tungstenite::Error;
+
+    use super::{map_wss_runtime_error, websocket_config};
+
+    #[test]
+    fn connection_closed_runtime_errors_map_to_transport_closed() {
+        assert_eq!(
+            map_wss_runtime_error(&Error::ConnectionClosed),
+            secure_tunnel_core::ApiError::TransportClosed
+        );
+        assert_eq!(
+            map_wss_runtime_error(&Error::AlreadyClosed),
+            secure_tunnel_core::ApiError::TransportClosed
+        );
+        assert_eq!(
+            map_wss_runtime_error(&Error::Io(std::io::Error::other("closed"))),
+            secure_tunnel_core::ApiError::TransportClosed
+        );
+    }
+
+    #[test]
+    fn websocket_config_caps_frames_and_messages_to_record_limit() {
+        let config = websocket_config();
+
+        assert_eq!(
+            config.max_message_size,
+            Some(secure_tunnel_core::MAX_RECORD_PAYLOAD_SIZE)
+        );
+        assert_eq!(
+            config.max_frame_size,
+            Some(secure_tunnel_core::MAX_RECORD_PAYLOAD_SIZE)
+        );
     }
 }

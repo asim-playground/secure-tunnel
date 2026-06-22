@@ -12,6 +12,7 @@ use secure_tunnel_core::{
     FramedDuplex, TransportTarget,
 };
 use tokio::net::lookup_host;
+use tokio::time::timeout;
 
 use crate::config::TransportClientConfig;
 use crate::framing::{encoded_record, validate_inbound_record};
@@ -51,7 +52,13 @@ impl CarrierConnector for QuicConnector {
                 phase = "connect_start"
             );
 
-            let remote = resolve_quic_addr(&target.connect_host, target.port).await?;
+            let timeouts = self.config.timeouts();
+            let remote = timeout(
+                timeouts.quic_connect,
+                resolve_quic_addr(&target.connect_host, target.port),
+            )
+            .await
+            .map_err(|_| ApiError::TransportFallback(FallbackReason::OuterPathFailure))??;
             let mut endpoint =
                 quinn::Endpoint::client(SocketAddr::from((Ipv6Addr::UNSPECIFIED, 0)))
                     .map_err(|_| ApiError::TransportFallback(FallbackReason::OuterPathFailure))?;
@@ -63,10 +70,13 @@ impl CarrierConnector for QuicConnector {
             let connecting = endpoint
                 .connect(remote, server_name)
                 .map_err(|_| ApiError::TransportFallback(FallbackReason::OuterQuicRejected))?;
-            let connection = connecting.await.map_err(map_quic_connect_error)?;
-            let (send, receive) = connection
-                .open_bi()
+            let connection = timeout(timeouts.quic_connect, connecting)
                 .await
+                .map_err(|_| ApiError::TransportFallback(FallbackReason::OuterPathFailure))?
+                .map_err(map_quic_connect_error)?;
+            let (send, receive) = timeout(timeouts.quic_connect, connection.open_bi())
+                .await
+                .map_err(|_| ApiError::TransportFallback(FallbackReason::OuterQuicClosedEarly))?
                 .map_err(|_| ApiError::TransportFallback(FallbackReason::OuterQuicClosedEarly))?;
             tracing::debug!(
                 event_name = "transport.adapter_connect",
@@ -79,6 +89,8 @@ impl CarrierConnector for QuicConnector {
                 connection,
                 send,
                 receive,
+                read_timeout: timeouts.record_read,
+                write_timeout: timeouts.record_write,
             }) as Box<dyn FramedDuplex>)
         })
     }
@@ -125,6 +137,8 @@ struct QuicFramedDuplex {
     connection: quinn::Connection,
     send: quinn::SendStream,
     receive: quinn::RecvStream,
+    read_timeout: std::time::Duration,
+    write_timeout: std::time::Duration,
 }
 
 impl FramedDuplex for QuicFramedDuplex {
@@ -135,9 +149,9 @@ impl FramedDuplex for QuicFramedDuplex {
     fn send_record<'a>(&'a mut self, record: &'a [u8]) -> BoxFuture<'a, ApiResult<()>> {
         Box::pin(async move {
             let encoded = encoded_record(record)?;
-            self.send
-                .write_all(&encoded)
+            timeout(self.write_timeout, self.send.write_all(&encoded))
                 .await
+                .map_err(|_| ApiError::TransportClosed)?
                 .map_err(|_| ApiError::TransportClosed)
         })
     }
@@ -145,13 +159,16 @@ impl FramedDuplex for QuicFramedDuplex {
     fn receive_record(&mut self) -> BoxFuture<'_, ApiResult<Option<Vec<u8>>>> {
         Box::pin(async move {
             let mut length = [0_u8; 2];
-            if self.receive.read_exact(&mut length).await.is_err() {
+            let length_result = timeout(self.read_timeout, self.receive.read_exact(&mut length))
+                .await
+                .map_err(|_| ApiError::TransportClosed)?;
+            if length_result.is_err() {
                 return Ok(None);
             }
             let mut payload = vec![0_u8; usize::from(u16::from_be_bytes(length))];
-            self.receive
-                .read_exact(&mut payload)
+            timeout(self.read_timeout, self.receive.read_exact(&mut payload))
                 .await
+                .map_err(|_| ApiError::TransportClosed)?
                 .map_err(|_| ApiError::TransportClosed)?;
             validate_inbound_record(&payload, CarrierKind::Quic)?;
             Ok(Some(payload))

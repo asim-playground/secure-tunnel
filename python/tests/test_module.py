@@ -78,6 +78,8 @@ def test_sdk_facade_types_are_public():
 
     assert isinstance(config, ClientConfig)
     assert config.quic_reprobe_delay_seconds == 300
+    assert config.quic_connect_timeout_ms == 2_000
+    assert config.secure_ready_timeout_ms == 3_000
     assert config.descriptor_trust_anchors
     assert config.pinned_service_static_public_keys
     assert SecureTunnelClient is not None

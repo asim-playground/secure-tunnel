@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+#MISE description="Run a small cargo-mutants smoke shard on security-critical Rust files"
+set -euo pipefail
+
+cargo mutants \
+  --package secure-tunnel-sdk \
+  --package secure-tunnel-transport \
+  --test-tool nextest \
+  --timeout 180 \
+  --shard 1/20 \
+  -f crates/sdk/src/client.rs \
+  -f crates/transport/src/quic.rs \
+  -f crates/transport/src/wss.rs \
+  -f crates/transport/src/framing.rs

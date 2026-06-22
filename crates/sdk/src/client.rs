@@ -6,10 +6,12 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
 use crate::cancellation::CancellationHandle;
+use crate::deadline::ConnectBudget;
 use crate::descriptor::{BootstrapDescriptor, TransportPolicyConfig};
 use crate::error::{ConnectError, ConnectResult, SdkError, SdkErrorKind};
 use crate::observability::{FailureClass, TelemetryOutcome, event_names};
@@ -191,29 +193,39 @@ impl SecureTunnelClient {
             return Err(error);
         }
         Self::check_cancelled(options.cancellation.as_ref())?;
+        let connect_budget = ConnectBudget::new(
+            Duration::from_millis(self.config.transport_policy.connect_timeout_ms),
+            options.cancellation.as_ref(),
+        );
+        let selector = connect_budget.guard_secure_ready(
+            self.ports.secure_ready(),
+            Duration::from_millis(self.config.transport_policy.secure_ready_timeout_ms),
+        );
+        let quic = self
+            .ports
+            .quic()
+            .map(|connector| connect_budget.guard_connector(connector));
+        let wss = self
+            .ports
+            .wss()
+            .map(|connector| connect_budget.guard_connector(connector));
 
-        let selected = secure_tunnel_core::TransportSelector::new(
+        let selection = secure_tunnel_core::TransportSelector::new(
             self.config.transport_policy.quic_reprobe_delay_seconds,
-        )
-        .select(
+        );
+        let selection = selection.select(
             options.descriptor.core_descriptor(),
             core_cache.as_ref(),
             options.now_unix_seconds,
-            secure_tunnel_core::TransportConnectors::new(self.ports.quic(), self.ports.wss()),
-            self.ports.secure_ready(),
-        )
-        .await
-        .map_err(|error| {
-            let attempts: Vec<TransportAttemptReport> = error
-                .attempts
-                .iter()
-                .map(TransportAttemptReport::from_core)
-                .collect();
-            let error = SdkError::from_core(&error.cause);
-            trace_attempts(&attempts);
-            trace_terminal_failure(error.kind());
-            ConnectError::with_attempts(error, attempts)
-        })?;
+            secure_tunnel_core::TransportConnectors::new(
+                quic.as_ref()
+                    .map(|connector| connector as &dyn secure_tunnel_core::CarrierConnector),
+                wss.as_ref()
+                    .map(|connector| connector as &dyn secure_tunnel_core::CarrierConnector),
+            ),
+            &selector,
+        );
+        let selected = selection.await.map_err(connect_error_from_selection)?;
 
         if options
             .cancellation
@@ -285,6 +297,24 @@ impl SecureTunnelClient {
             _ => Ok(()),
         }
     }
+}
+
+fn connect_error_from_selection(
+    error: secure_tunnel_core::TransportSelectionError,
+) -> ConnectError {
+    let secure_tunnel_core::TransportSelectionError { cause, attempts } = error;
+    let attempts: Vec<TransportAttemptReport> = attempts
+        .iter()
+        .map(TransportAttemptReport::from_core)
+        .collect();
+    if matches!(cause, secure_tunnel_core::ApiError::OperationCancelled) {
+        trace_terminal_failure(SdkErrorKind::Cancelled);
+        return ConnectError::with_attempts(SdkError::cancelled(), attempts);
+    }
+    let error = SdkError::from_core(&cause);
+    trace_attempts(&attempts);
+    trace_terminal_failure(error.kind());
+    ConnectError::with_attempts(error, attempts)
 }
 
 fn trace_descriptor_validation(service_id: &str, environment_id: &str, kind: SdkErrorKind) {

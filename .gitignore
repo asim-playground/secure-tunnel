@@ -21,6 +21,8 @@ target/
 .direnv/
 .mise/
 **/lcov.info
+mutants.out/
+mutants.out.old/
 
 # Track repo-local backlog artifacts even though backlog/ is globally ignored.
 !backlog/

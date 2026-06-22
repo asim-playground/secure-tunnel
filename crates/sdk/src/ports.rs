@@ -31,7 +31,21 @@ impl ProductionTransportPorts {
             .with_descriptor_trust_anchors(config.descriptor_trust_anchors.clone())
             .with_pinned_service_static_public_keys(
                 config.pinned_service_static_public_keys.clone(),
-            );
+            )
+            .with_timeouts(secure_tunnel_transport::TransportClientTimeouts {
+                quic_connect: std::time::Duration::from_millis(
+                    config.transport_policy.quic_connect_timeout_ms,
+                ),
+                wss_connect: std::time::Duration::from_millis(
+                    config.transport_policy.wss_connect_timeout_ms,
+                ),
+                record_read: std::time::Duration::from_millis(
+                    config.transport_policy.record_read_timeout_ms,
+                ),
+                record_write: std::time::Duration::from_millis(
+                    config.transport_policy.record_write_timeout_ms,
+                ),
+            });
         Self {
             inner: secure_tunnel_transport::ProductionTransportPorts::new(transport_config),
         }

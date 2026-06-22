@@ -83,6 +83,35 @@ impl MockPorts {
         }
     }
 
+    pub(super) fn pending_quic() -> Self {
+        Self {
+            quic: MockConnector::pending(secure_tunnel_core::CarrierKind::Quic),
+            wss: MockConnector::succeeds(secure_tunnel_core::CarrierKind::Wss),
+            secure_ready: MockSecureReadyEvaluator::success(),
+        }
+    }
+
+    pub(super) fn pending_quic_secure_ready_then_wss_success() -> Self {
+        Self {
+            quic: MockConnector::succeeds(secure_tunnel_core::CarrierKind::Quic),
+            wss: MockConnector::succeeds(secure_tunnel_core::CarrierKind::Wss),
+            secure_ready: MockSecureReadyEvaluator::pending_then_success(),
+        }
+    }
+
+    pub(super) fn quic_fallback_then_pending_wss() -> Self {
+        Self {
+            quic: MockConnector::fails(
+                secure_tunnel_core::CarrierKind::Quic,
+                secure_tunnel_core::ApiError::TransportFallback(
+                    secure_tunnel_core::FallbackReason::OuterPathFailure,
+                ),
+            ),
+            wss: MockConnector::pending(secure_tunnel_core::CarrierKind::Wss),
+            secure_ready: MockSecureReadyEvaluator::success(),
+        }
+    }
+
     pub(super) fn sent_records(&self) -> Vec<Vec<u8>> {
         lock(&self.quic.state.sent).clone()
     }
@@ -116,6 +145,7 @@ struct MockConnector {
     state: Arc<MockDuplexState>,
     connects: Arc<Mutex<usize>>,
     cancellation: Option<CancellationHandle>,
+    pending_connect: bool,
 }
 
 impl MockConnector {
@@ -133,6 +163,7 @@ impl MockConnector {
             state: Arc::new(MockDuplexState::new(receives, 0)),
             connects: Arc::new(Mutex::new(0)),
             cancellation: None,
+            pending_connect: false,
         }
     }
 
@@ -143,6 +174,7 @@ impl MockConnector {
             state: Arc::new(MockDuplexState::new([], 1)),
             connects: Arc::new(Mutex::new(0)),
             cancellation: None,
+            pending_connect: false,
         }
     }
 
@@ -156,6 +188,7 @@ impl MockConnector {
             state: Arc::new(MockDuplexState::new([], 0)),
             connects: Arc::new(Mutex::new(0)),
             cancellation: Some(cancellation),
+            pending_connect: false,
         }
     }
 
@@ -169,6 +202,18 @@ impl MockConnector {
             state: Arc::new(MockDuplexState::new([], 0)),
             connects: Arc::new(Mutex::new(0)),
             cancellation: None,
+            pending_connect: false,
+        }
+    }
+
+    fn pending(carrier: secure_tunnel_core::CarrierKind) -> Self {
+        Self {
+            carrier,
+            outcomes: Mutex::new(VecDeque::new()),
+            state: Arc::new(MockDuplexState::new([], 0)),
+            connects: Arc::new(Mutex::new(0)),
+            cancellation: None,
+            pending_connect: true,
         }
     }
 }
@@ -192,6 +237,9 @@ impl secure_tunnel_core::CarrierConnector for MockConnector {
         if let Some(cancellation) = &self.cancellation {
             cancellation.cancel();
         }
+        if self.pending_connect {
+            return pending_connect();
+        }
         Box::pin(async move {
             result.map(|()| {
                 Box::new(MockFramedDuplex { carrier, state })
@@ -202,21 +250,35 @@ impl secure_tunnel_core::CarrierConnector for MockConnector {
 }
 
 struct MockSecureReadyEvaluator {
-    outcomes: Mutex<VecDeque<secure_tunnel_core::ApiResult<()>>>,
+    outcomes: Mutex<VecDeque<MockSecureReadyOutcome>>,
 }
 
 impl MockSecureReadyEvaluator {
     fn success() -> Self {
         Self {
-            outcomes: Mutex::new(VecDeque::from([Ok(())])),
+            outcomes: Mutex::new(VecDeque::from([MockSecureReadyOutcome::Ready(Ok(()))])),
         }
     }
 
     fn fails(error: secure_tunnel_core::ApiError) -> Self {
         Self {
-            outcomes: Mutex::new(VecDeque::from([Err(error)])),
+            outcomes: Mutex::new(VecDeque::from([MockSecureReadyOutcome::Ready(Err(error))])),
         }
     }
+
+    fn pending_then_success() -> Self {
+        Self {
+            outcomes: Mutex::new(VecDeque::from([
+                MockSecureReadyOutcome::Pending,
+                MockSecureReadyOutcome::Ready(Ok(())),
+            ])),
+        }
+    }
+}
+
+enum MockSecureReadyOutcome {
+    Ready(secure_tunnel_core::ApiResult<()>),
+    Pending,
 }
 
 impl secure_tunnel_core::SecureReadyEvaluator for MockSecureReadyEvaluator {
@@ -229,16 +291,23 @@ impl secure_tunnel_core::SecureReadyEvaluator for MockSecureReadyEvaluator {
         '_,
         secure_tunnel_core::ApiResult<secure_tunnel_core::SecureReadyTransport>,
     > {
-        let result = lock(&self.outcomes).pop_front().unwrap_or(Ok(()));
+        let result = lock(&self.outcomes)
+            .pop_front()
+            .unwrap_or(MockSecureReadyOutcome::Ready(Ok(())));
         Box::pin(async move {
-            result.map(|()| secure_tunnel_core::SecureReadyTransport {
-                transport,
-                artifacts: secure_tunnel_core::SecureReadyArtifacts {
-                    handshake_hash: Some(vec![0xAA; 32]),
-                    channel_binding: Some(vec![0xCC; 32]),
-                    service_static_public_key: Some(vec![0xDD; 32]),
-                },
-            })
+            match result {
+                MockSecureReadyOutcome::Ready(result) => {
+                    result.map(|()| secure_tunnel_core::SecureReadyTransport {
+                        transport,
+                        artifacts: secure_tunnel_core::SecureReadyArtifacts {
+                            handshake_hash: Some(vec![0xAA; 32]),
+                            channel_binding: Some(vec![0xCC; 32]),
+                            service_static_public_key: Some(vec![0xDD; 32]),
+                        },
+                    })
+                }
+                MockSecureReadyOutcome::Pending => pending().await,
+            }
         })
     }
 }
@@ -299,6 +368,13 @@ impl secure_tunnel_core::FramedDuplex for MockFramedDuplex {
 }
 
 fn pending_send() -> Pin<Box<dyn Future<Output = secure_tunnel_core::ApiResult<()>> + Send>> {
+    Box::pin(pending())
+}
+
+fn pending_connect() -> secure_tunnel_core::BoxFuture<
+    'static,
+    secure_tunnel_core::ApiResult<Box<dyn secure_tunnel_core::FramedDuplex>>,
+> {
     Box::pin(pending())
 }
 

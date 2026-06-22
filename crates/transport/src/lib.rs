@@ -15,7 +15,7 @@ mod framing;
 mod quic;
 mod wss;
 
-pub use config::TransportClientConfig;
+pub use config::{TransportClientConfig, TransportClientTimeouts};
 pub use quic::QuicConnector;
 pub use wss::WssConnector;
 
