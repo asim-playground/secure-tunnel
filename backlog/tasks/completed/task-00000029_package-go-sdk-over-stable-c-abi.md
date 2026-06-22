@@ -36,28 +36,28 @@ a future task proves concrete product need.
 
 ### A) Go SDK boundary is explicit
 
-- [ ] Define which SDK operations Go consumes through the manual C ABI and
+- [x] Define which SDK operations Go consumes through the manual C ABI and
       which remain Rust-only.
-- [ ] Keep Go aligned with the same Rust SDK facade behavior used by native and
+- [x] Keep Go aligned with the same Rust SDK facade behavior used by native and
       Flutter/Dart packages.
-- [ ] Preserve explicit ownership, allocation, and error rules for every C ABI
+- [x] Preserve explicit ownership, allocation, and error rules for every C ABI
       value exposed to Go.
 
 ### B) Go package is consumable
 
-- [ ] Package native Go bindings with reproducible header/library generation.
-- [ ] Deprecate or delete the existing Go-WASM binding scaffold; do not treat
+- [x] Package native Go bindings with reproducible header/library generation.
+- [x] Deprecate or delete the existing Go-WASM binding scaffold; do not treat
       Go-WASM as a supported SDK target unless a future task proves concrete
       product need.
-- [ ] Add generated-header drift checks so Go bindings cannot silently fall
+- [x] Add generated-header drift checks so Go bindings cannot silently fall
       behind the C ABI.
 
 ### C) Go smoke tests prove behavior
 
-- [ ] Add native Go import/build tests.
-- [ ] Run at least one descriptor/config/session scenario through the Go
+- [x] Add native Go import/build tests.
+- [x] Run at least one descriptor/config/session scenario through the Go
       package or a documented local fixture.
-- [ ] Verify memory ownership and error cleanup paths in tests.
+- [x] Verify memory ownership and error cleanup paths in tests.
 
 ## Cross-Repo Boundaries
 
@@ -97,22 +97,58 @@ a future task proves concrete product need.
 
 ## Implementation Notes
 
-- [ ] Implementation notes added with command evidence.
+- [x] Implementation notes added with command evidence.
 - Use `/Users/asimi/Downloads/references/cbindgen` as the local upstream
   reference for generated C header behavior.
+- Implemented the supported Go path as `crates/go/go`, backed by coarse C ABI
+  entry points in `crates/go/src/sdk.rs` over the Rust SDK facade:
+  default config, client creation/free, connect, connect report, security
+  artifacts, account auth, request/response, close, and byte/string cleanup.
+- Kept Go-WASM available under explicit `go-wasm:*` tasks but marked it
+  deprecated and removed it from default `build-all`, `lint`, and `test`
+  gates.
+- Generated `crates/go/binding.h` with cbindgen and added `mise run sdk:go`
+  for header drift, Go import/build, `go test -race`, and fixture smoke.
+- Preserved Rust SDK defaults for omitted Go transport policy, descriptor
+  trust anchors, and service pins. Go `ClientConfig{}` now omits
+  `transport_policy` in JSON so Rust defaults apply.
+- Added Go transport cache and full successful connect report structs,
+  including attempts, fallback/cache state, and updated cache snapshots.
+- Hardened Go handle ownership with `RWMutex` guarded C calls,
+  `runtime.KeepAlive`, close serialization, explicit `secure_tunnel_free_*`
+  cleanup, and a concurrent close/connect-validation race test.
+- Validation evidence:
+  - `cargo check -p secure-tunnel-ffi` passed.
+  - `mise run go:test` passed.
+  - `mise run sdk:go` passed, including `go test ./...`,
+    `go test -race ./...`, and the native Go fixture smoke.
+  - `mise run dev` passed: Rust nextest 95/95, Python tests and smokes,
+    Go tests, lint, and formatting.
 
 ## Implementation Plan
 
-1. Map the Rust SDK facade to the stable C ABI operations Go needs.
-2. Extend the C ABI and Go bindings while preserving ownership/error rules.
-3. Remove or clearly deprecate the Go-WASM scaffold from supported SDK scope.
-4. Add header drift, native Go import, and memory/error cleanup tests.
-5. Run package validation and independent review.
+1. [x] Map the Rust SDK facade to the stable C ABI operations Go needs.
+2. [x] Extend the C ABI and Go bindings while preserving ownership/error rules.
+3. [x] Remove or clearly deprecate the Go-WASM scaffold from supported SDK scope.
+4. [x] Add header drift, native Go import, and memory/error cleanup tests.
+5. [x] Run package validation and independent review.
 
 ## Review Notes
 
+- Initial independent review found one high and two medium findings:
+  concurrent Go handle close could race in-flight C calls, Go did not expose
+  transport cache/attempt report behavior, and zero-value Go config serialized
+  a zero transport policy instead of Rust defaults.
+- Fixed those findings with handle locks and `runtime.KeepAlive`, optional
+  transport-cache JSON through the C ABI, full successful report/cache Go
+  structs, zero-config default preservation, and `go test -race` coverage.
+- Same reviewer re-reviewed the fix and reported no unresolved high or medium
+  findings.
+- Residual low-risk follow-up captured in `task-00000032`: cache-specific Go
+  regression coverage and structured failed-connect attempt reporting.
+
 ## Acceptance Closure
 
-- [ ] All acceptance criteria are satisfied and marked.
-- [ ] Verification commands and outcomes are recorded.
-- [ ] No unresolved high/medium findings remain.
+- [x] All acceptance criteria are satisfied and marked.
+- [x] Verification commands and outcomes are recorded.
+- [x] No unresolved high/medium findings remain.

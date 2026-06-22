@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+#MISE description="Run end-to-end smoke through the native Go SDK package"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+# shellcheck disable=SC1091
+# shellcheck source=../smoke-common.sh
+source mise-tasks/sdk/smoke-common.sh
+# shellcheck disable=SC1091
+# shellcheck source=common.sh
+source mise-tasks/sdk/go/common.sh
+
+mise run go:build
+
+fixture_json="$(mktemp "${TMPDIR:-/tmp}/secure-tunnel-go-package-fixture.XXXXXX.json")"
+trap 'stop_secure_tunnel_fixture; rm -f "${fixture_json}"' EXIT
+
+start_secure_tunnel_fixture "${fixture_json}"
+(
+	cd "$(go_sdk_package_root)"
+	SECURE_TUNNEL_GO_FIXTURE_JSON="${fixture_json}" go test ./...
+)

@@ -5,13 +5,16 @@ set -euo pipefail
 mise run build-all
 mise run sdk:check-bindings
 if [[ "$(uname -s)" != MINGW* && "$(uname -s)" != CYGWIN* && "$(uname -s)" != MSYS* ]]; then
-  mise run sdk:kotlin
+	mise run sdk:kotlin
+fi
+if [[ "$(uname -s)" != MINGW* && "$(uname -s)" != CYGWIN* && "$(uname -s)" != MSYS* && "${SECURE_TUNNEL_SKIP_GO_SDK_TESTS:-0}" != "1" ]]; then
+	mise run sdk:go
 fi
 if [[ "$(uname -s)" != MINGW* && "$(uname -s)" != CYGWIN* && "$(uname -s)" != MSYS* && "${SECURE_TUNNEL_SKIP_FLUTTER_SDK_TESTS:-0}" != "1" ]]; then
-  mise run sdk:flutter
+	mise run sdk:flutter
 fi
 if [[ "$(uname -s)" == "Darwin" && "${SECURE_TUNNEL_SKIP_SWIFT_SDK_TESTS:-0}" != "1" ]]; then
-  mise run sdk:swift
+	mise run sdk:swift
 fi
 mise run lint-all
 mise run test-all

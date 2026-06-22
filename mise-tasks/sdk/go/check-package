@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+#MISE description="Check the native Go SDK package and generated header"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+# shellcheck disable=SC1091
+# shellcheck source=common.sh
+source mise-tasks/sdk/go/common.sh
+
+header_path="$(go_sdk_header_path)"
+before_hash="$(shasum -a 256 "${header_path}")"
+mise run go:generate-bindings
+after_hash="$(shasum -a 256 "${header_path}")"
+if [[ "${before_hash}" != "${after_hash}" ]]; then
+	echo "generated Go C header is stale: ${header_path}" >&2
+	diff -u <(printf '%s\n' "${before_hash}") <(printf '%s\n' "${after_hash}") >&2 || true
+	exit 1
+fi
+
+mise run go:build
+(
+	cd "$(go_sdk_package_root)"
+	go test ./...
+	go test -race ./...
+)
+
+echo "Native Go SDK package checks passed at $(go_sdk_package_root)"

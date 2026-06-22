@@ -4,10 +4,6 @@ set -euo pipefail
 
 mise run rust:build
 
-
 mise run python:build
 
-
 mise run go:build
-mise run go-wasm:build
-

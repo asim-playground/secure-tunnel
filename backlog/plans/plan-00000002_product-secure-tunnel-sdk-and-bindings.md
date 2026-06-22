@@ -13,7 +13,7 @@ superseded_by: []
 - Status: `draft`
 - Owner: `Asim Ihsan`
 - Related Plans: `plan-00000001`
-- Related Tasks: `task-00000007, task-00000008, task-00000009, task-00000013, task-00000014, task-00000017, task-00000018, task-00000019, task-00000020, task-00000021, task-00000022, task-00000023, task-00000024, task-00000025, task-00000026, task-00000027, task-00000028, task-00000029, task-00000030, task-00000031`
+- Related Tasks: `task-00000007, task-00000008, task-00000009, task-00000013, task-00000014, task-00000017, task-00000018, task-00000019, task-00000020, task-00000021, task-00000022, task-00000023, task-00000024, task-00000025, task-00000026, task-00000027, task-00000028, task-00000029, task-00000030, task-00000031, task-00000032`
 
 ## Summary
 
@@ -215,7 +215,7 @@ Rust facade and behavior.
 
 ## Phase Plan
 
-- Current Phase: `Phase 5 - package Flutter and Go SDKs`
+- Current Phase: `Phase 6 - release SDKs`
 
 ### Phase 0 - `close foundation gates`
 
@@ -311,9 +311,9 @@ Rust facade and behavior.
 - Exit Criteria:
     - [x] Flutter/Dart can import the package and run a descriptor/session smoke
           test through a hand-written facade over generated bridge code.
-    - [ ] Go can import the package and run a descriptor/session smoke test over
+    - [x] Go can import the package and run a descriptor/session smoke test over
           the stable C ABI.
-    - [ ] Flutter/Dart and Go package checks share the same fixture semantics
+    - [x] Flutter/Dart and Go package checks share the same fixture semantics
           as Swift, Kotlin, and Python.
 
 ### Phase 6 - `release SDKs`
@@ -321,6 +321,7 @@ Rust facade and behavior.
 - Objective: version, build, and archive the supported SDK artifacts
   reproducibly.
 - Candidate Tasks:
+    - `task-00000032` `harden go sdk cache and failure reporting`
     - `task-00000027` `add sdk release ci and versioning`
 - Exit Criteria:
     - [ ] CI builds and archives package artifacts with versioned outputs.
@@ -350,9 +351,10 @@ Rust facade and behavior.
 | task-`00000025` | `package kotlin sdk as jvm or android artifact` | `Phase 4` | `task-00000022, task-00000023` | `completed` |
 | task-`00000026` | `package python sdk from the shared rust facade` | `Phase 4` | `task-00000022, task-00000023` | `completed` |
 | task-`00000030` | `build python fastapi server and rust client e2e` | `Phase 4` | `task-00000023, task-00000026` | `completed` |
-| task-`00000028` | `package flutter dart sdk using rust facade` | `Phase 5` | `task-00000018, task-00000021, task-00000022, task-00000024` | `proposed` |
-| task-`00000029` | `package go sdk over stable c abi` | `Phase 5` | `task-00000016, task-00000018, task-00000021, task-00000022, task-00000024` | `proposed` |
-| task-`00000027` | `add sdk release ci and versioning` | `Phase 6` | `task-00000022, task-00000024, task-00000025, task-00000026, task-00000028, task-00000029` | `proposed` |
+| task-`00000028` | `package flutter dart sdk using rust facade` | `Phase 5` | `task-00000018, task-00000021, task-00000022, task-00000024` | `completed` |
+| task-`00000029` | `package go sdk over stable c abi` | `Phase 5` | `task-00000016, task-00000018, task-00000021, task-00000022, task-00000024` | `completed` |
+| task-`00000032` | `harden go sdk cache and failure reporting` | `Phase 6` | `task-00000029` | `proposed` |
+| task-`00000027` | `add sdk release ci and versioning` | `Phase 6` | `task-00000022, task-00000024, task-00000025, task-00000026, task-00000028, task-00000029, task-00000032` | `proposed` |
 
 ## Validation Strategy
 
@@ -384,7 +386,7 @@ Rust facade and behavior.
     - [x] Swift, Kotlin, and Python bindings are generated from the same pinned
           facade.
     - [x] Swift/iOS is the first production-grade SDK package target.
-    - [ ] Flutter/Dart and Go package tasks exist and share the same Rust SDK
+    - [x] Flutter/Dart and Go package tasks exist and share the same Rust SDK
           facade semantics.
     - [ ] Native packages build in CI and pass import/session smoke tests.
     - [ ] No unresolved high/medium independent review findings remain.
@@ -418,14 +420,13 @@ Rust facade and behavior.
 
 ## Immediate Next Actions
 
-1. Start `task-00000028` and `task-00000029`, keeping Flutter/Dart and native
-   Go on the same fixture semantics as Swift, Kotlin, Python, and
-   Rust-client/FastAPI smokes.
+1. Start `task-00000032` to close Go cache-specific and structured
+   failed-connect reporting hardening before release packaging.
 2. Keep `task-00000013` and `task-00000014` queued for managed-network support
    before declaring the SDK broadly production-ready.
-3. Start `task-00000027` after Flutter/Dart and Go package smoke parity, so
-   release packaging can archive all supported SDK artifacts and fail stale
-   generated/package metadata.
+3. Start `task-00000027` after `task-00000032`, so release packaging can
+   archive all supported SDK artifacts and fail stale generated/package
+   metadata.
 
 ## Implementation Notes
 
@@ -514,6 +515,17 @@ Rust facade and behavior.
   for JNA loading, publishes to a generated local Maven repo, runs generated
   and packaged Kotlin QUIC/session smokes, and gates non-Windows CI with
   `mise run sdk:kotlin`.
+- `2026-06-22`: Completed `task-00000028` with a Flutter Rust Bridge-backed
+  Flutter/Dart package, hand-written Dart facades, generated-code drift checks,
+  fixture session smoke, and iOS simulator smoke wiring over the Rust SDK
+  facade.
+- `2026-06-22`: Completed `task-00000029` with a native Go SDK package over
+  the manual C ABI, generated-header drift checks, `go test -race`, fixture
+  session smoke, Go-WASM deprecation from default SDK gates, and independent
+  review/re-review closure.
+- `2026-06-22`: Added `task-00000032` for residual Go SDK release hardening:
+  cache-specific Go regression coverage and structured failed-connect attempt
+  reporting before release CI.
 
 ## Completion Checklist
 
@@ -545,3 +557,4 @@ Rust facade and behavior.
 - `2026-06-21` `Review and user-request follow-up: added Python dataclass/StrEnum server configuration, server optional extra wheel coverage, timeout-safe fixture startup cleanup, and Rust CLI tracing-subscriber configuration from Python-provided environment.`
 - `2026-06-21` `Added task 00000031 for timeout/cancellation security hardening, STRIDE review, stalled-peer regressions, and cargo-mutants automation.`
 - `2026-06-21` `Completed task 00000031 after independent review and re-review; final validation included mise run dev, security:test, sdk:check-bindings, cargo-mutants list, and cargo-mutants smoke.`
+- `2026-06-22` `Completed task 00000028 and task 00000029, moved the plan to Phase 6 release work, and added task 00000032 for residual Go SDK cache/error hardening before release CI.`

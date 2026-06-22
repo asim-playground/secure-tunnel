@@ -7,6 +7,8 @@
 
 //! C ABI for Swift, Go, and other foreign-language callers.
 
+mod sdk;
+
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 
@@ -36,6 +38,14 @@ pub enum SecureTunnelStatus {
     SecureTunnelStatusInvalidDescriptor = 4,
     /// The Rust side could not allocate a caller-owned C string.
     SecureTunnelStatusAllocationFailure = 5,
+    /// Caller configuration was invalid.
+    SecureTunnelStatusInvalidConfig = 6,
+    /// Creating a runtime or opaque handle failed.
+    SecureTunnelStatusRuntimeFailure = 7,
+    /// The SDK connect operation failed.
+    SecureTunnelStatusConnectFailure = 8,
+    /// An authenticated session operation failed.
+    SecureTunnelStatusSessionFailure = 9,
 }
 
 /// Result for FFI calls that return a caller-owned string or an error message.
@@ -191,7 +201,10 @@ fn encode_json(descriptor: &ServiceDescriptor) -> SecureTunnelStringResult {
     }
 }
 
-fn string_result(status: SecureTunnelStatus, value: impl Into<String>) -> SecureTunnelStringResult {
+pub(crate) fn string_result(
+    status: SecureTunnelStatus,
+    value: impl Into<String>,
+) -> SecureTunnelStringResult {
     CString::new(value.into()).map_or_else(
         |_| SecureTunnelStringResult {
             status: SecureTunnelStatus::SecureTunnelStatusAllocationFailure,
@@ -202,6 +215,31 @@ fn string_result(status: SecureTunnelStatus, value: impl Into<String>) -> Secure
             value: value.into_raw(),
         },
     )
+}
+
+pub(crate) fn error_string(value: impl Into<String>) -> *mut c_char {
+    CString::new(value.into()).map_or(std::ptr::null_mut(), CString::into_raw)
+}
+
+pub(crate) unsafe fn c_string_to_string(
+    value: *const c_char,
+    name: &str,
+) -> Result<String, SecureTunnelStringResult> {
+    if value.is_null() {
+        return Err(string_result(
+            SecureTunnelStatus::SecureTunnelStatusNullPointer,
+            format!("{name} must not be null"),
+        ));
+    }
+    unsafe { CStr::from_ptr(value) }
+        .to_str()
+        .map(str::to_owned)
+        .map_err(|error| {
+            string_result(
+                SecureTunnelStatus::SecureTunnelStatusInvalidUtf8,
+                error.to_string(),
+            )
+        })
 }
 
 #[cfg(test)]

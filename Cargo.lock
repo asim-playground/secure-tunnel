@@ -1602,8 +1602,12 @@ dependencies = [
 name = "secure-tunnel-ffi"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "secure-tunnel-core",
+ "secure-tunnel-sdk",
+ "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]

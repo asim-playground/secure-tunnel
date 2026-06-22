@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE description="Build and smoke-test the native Go SDK package"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+
+mise run sdk:go:check-package
+mise run sdk:go:smoke-package

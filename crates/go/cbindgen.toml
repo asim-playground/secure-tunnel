@@ -17,4 +17,14 @@ tab_width = 4
 "target_os = linux" = "LINUX"
 
 [export]
-include = ["SecureTunnelStatus", "SecureTunnelStringResult"]
+include = [
+    "SecureTunnelAccountAuthMode",
+    "SecureTunnelByteBuffer",
+    "SecureTunnelBytesResult",
+    "SecureTunnelClientHandle",
+    "SecureTunnelClientResult",
+    "SecureTunnelConnectionHandle",
+    "SecureTunnelConnectionResult",
+    "SecureTunnelStatus",
+    "SecureTunnelStringResult",
+]

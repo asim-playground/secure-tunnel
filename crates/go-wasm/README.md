@@ -1,4 +1,9 @@
-# Go WASM Bindings
+# Deprecated Go WASM Bindings
+
+This scaffold is deprecated and is not a supported Secure Tunnel SDK target.
+Native Go over the manual C ABI in `crates/go` is the supported Go SDK path.
+The WASM scaffold remains only as legacy experimental code until a future task
+either deletes it or proves a concrete product need.
 
 This directory contains a Go binding for Secure Tunnel protocol metadata and
 descriptor validation that uses WebAssembly (WASM) with WASI support instead of
