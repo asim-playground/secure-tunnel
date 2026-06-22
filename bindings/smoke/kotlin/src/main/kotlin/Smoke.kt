@@ -41,6 +41,7 @@ fun main() {
         recordReadTimeoutMs = defaults.recordReadTimeoutMs,
         recordWriteTimeoutMs = defaults.recordWriteTimeoutMs,
         outerRootCertificatesDer = decodeMany(fixture.required("outer_root_certificates_der_b64")),
+        wssHttpProxy = null,
         descriptorTrustAnchors = defaults.descriptorTrustAnchors,
         pinnedServiceStaticPublicKeys = decodeMany(
             fixture.required("pinned_service_static_public_keys_b64"),

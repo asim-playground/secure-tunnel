@@ -33,10 +33,19 @@ pub struct ClientConfig {
     /// Android extra-root support is currently unavailable in the verifier
     /// dependency and fails outer carrier TLS when non-empty.
     pub outer_root_certificates_der: Option<Vec<Vec<u8>>>,
+    /// Optional explicit plain HTTP proxy for the outer `WSS` carrier only.
+    pub wss_http_proxy: Option<HttpProxyConfig>,
     /// Pinned descriptor roots that may authorize service descriptors.
     pub descriptor_trust_anchors: Vec<secure_tunnel_core::TrustAnchor>,
     /// Pinned service static public keys accepted for the inner `NK1` channel.
     pub pinned_service_static_public_keys: Vec<secure_tunnel_core::NoisePublicKey>,
+}
+
+/// Explicit HTTP proxy configuration used by `WSS`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HttpProxyConfig {
+    /// Plain HTTP proxy URL in the v1 `http://host:port` form.
+    pub url: String,
 }
 
 impl ClientConfig {
@@ -71,6 +80,26 @@ impl ClientConfig {
         self.outer_root_certificates_der = Some(certificates);
         self
     }
+
+    /// Sets an explicit plain HTTP `CONNECT` proxy for outer `WSS` only.
+    ///
+    /// V1 accepts only `http://host:port` with no credentials, path, query,
+    /// fragment, environment discovery, proxy authentication, HTTPS proxy, or
+    /// SOCKS support. The proxy setting does not affect `QUIC`, descriptors,
+    /// or inner service-static-key trust.
+    #[must_use]
+    pub fn with_wss_http_proxy(mut self, proxy: HttpProxyConfig) -> Self {
+        self.wss_http_proxy = Some(proxy);
+        self
+    }
+}
+
+impl HttpProxyConfig {
+    /// Creates an explicit HTTP proxy configuration.
+    #[must_use]
+    pub fn new(url: impl Into<String>) -> Self {
+        Self { url: url.into() }
+    }
 }
 
 impl Default for ClientConfig {
@@ -78,6 +107,7 @@ impl Default for ClientConfig {
         Self {
             transport_policy: TransportPolicyConfig::default(),
             outer_root_certificates_der: None,
+            wss_http_proxy: None,
             descriptor_trust_anchors: secure_tunnel_core::example_descriptor_trust_anchors(),
             pinned_service_static_public_keys: vec![
                 secure_tunnel_core::obfuscated_service_static_public_key(),

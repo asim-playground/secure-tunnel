@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{HarnessError, HarnessResult, SmokeScenario};
 
+mod managed_network;
 mod scenarios;
 pub use scenarios::run_conformance_scenario;
 
@@ -54,6 +55,8 @@ pub enum ConformanceScenario {
     CustomCaInnerTrustFailure,
     /// Wrong custom outer TLS roots surface as SDK outer TLS failure.
     CustomCaWrongRootTlsFailure,
+    /// Explicit HTTP proxy carries the outer `WSS` connection.
+    ProxiedWss,
 }
 
 impl ConformanceScenario {
@@ -79,6 +82,7 @@ impl ConformanceScenario {
             Self::CustomCaQuicRejectedWssFallback => "custom-ca-quic-rejected-wss-fallback",
             Self::CustomCaInnerTrustFailure => "custom-ca-inner-trust-failure",
             Self::CustomCaWrongRootTlsFailure => "custom-ca-wrong-root-tls-failure",
+            Self::ProxiedWss => "proxied-wss",
         }
     }
 }
@@ -126,6 +130,7 @@ impl FromStr for ConformanceScenario {
             "custom-ca-wrong-root-tls-failure" | "custom_ca_wrong_root_tls_failure" => {
                 Ok(Self::CustomCaWrongRootTlsFailure)
             }
+            "proxied-wss" | "proxied_wss" => Ok(Self::ProxiedWss),
             _ => Err(HarnessError::Invariant("unknown conformance scenario")),
         }
     }
@@ -189,6 +194,7 @@ const CURRENT_SCENARIOS: &[ConformanceScenario] = &[
     ConformanceScenario::CustomCaQuicRejectedWssFallback,
     ConformanceScenario::CustomCaInnerTrustFailure,
     ConformanceScenario::CustomCaWrongRootTlsFailure,
+    ConformanceScenario::ProxiedWss,
 ];
 
 /// Runs all implemented conformance scenarios.
@@ -211,10 +217,6 @@ pub async fn run_conformance_suite() -> HarnessResult<ConformanceSuiteReport> {
 
 fn pending_rows() -> Vec<PendingConformanceReport> {
     vec![
-        PendingConformanceReport {
-            scenario: "proxied-wss".to_owned(),
-            reason: "blocked on task-00000014".to_owned(),
-        },
         PendingConformanceReport {
             scenario: "abrupt-close".to_owned(),
             reason: "requires close-failure fixture beyond current local server".to_owned(),

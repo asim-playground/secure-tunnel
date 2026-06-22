@@ -10,18 +10,26 @@ use secure_tunnel_core::{
     ApiError, ApiResult, BoxFuture, CarrierConnector, CarrierKind, CloseDirective, FramedDuplex,
     MAX_RECORD_PAYLOAD_SIZE, TransportTarget,
 };
-use tokio::time::timeout;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
+use tokio::time::{Instant, timeout};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::handshake::client::{Request, Response};
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::tungstenite::http::header::{HOST, SEC_WEBSOCKET_PROTOCOL};
 use tokio_tungstenite::tungstenite::protocol::{CloseFrame, Message, WebSocketConfig};
 use tokio_tungstenite::{
-    Connector, MaybeTlsStream, WebSocketStream, connect_async_tls_with_config,
+    Connector, MaybeTlsStream, WebSocketStream, client_async_tls_with_config,
+    connect_async_tls_with_config,
 };
-use url::Url;
+use url::{Host, Url};
 
-use crate::config::TransportClientConfig;
+use crate::config::{HttpProxyConfig, TransportClientConfig};
 use crate::framing::{validate_inbound_record, validate_outbound_record};
+
+const MAX_PROXY_CONNECT_RESPONSE_BYTES: usize = 8192;
+
+type WssStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
 /// Production `WSS` connector for the v1 carrier binding.
 #[derive(Debug, Clone)]
@@ -57,7 +65,7 @@ impl CarrierConnector for WssConnector {
                 carrier = "wss",
                 phase = "connect_start"
             );
-            validate_wss_url(&target.url)?;
+            let target_url = validate_wss_url(&target.url)?;
             let mut request = target
                 .url
                 .as_str()
@@ -77,19 +85,9 @@ impl CarrierConnector for WssConnector {
             }
 
             let timeouts = self.config.timeouts();
-            let connector = Connector::Rustls(self.config.wss_client_config()?);
-            let (stream, response) = timeout(
-                timeouts.wss_connect,
-                Box::pin(connect_async_tls_with_config(
-                    request,
-                    Some(websocket_config()),
-                    false,
-                    Some(connector),
-                )),
-            )
-            .await
-            .map_err(|_| ApiError::OuterPathFailure(CarrierKind::Wss))?
-            .map_err(|error| map_wss_connect_error(&error))?;
+            let (stream, response) =
+                connect_wss_stream(&self.config, &target_url, request, timeouts.wss_connect)
+                    .await?;
             validate_selected_subprotocol(&response, &target.subprotocol)?;
             tracing::debug!(
                 event_name = "transport.adapter_connect",
@@ -112,18 +110,183 @@ fn websocket_config() -> WebSocketConfig {
         .max_frame_size(Some(MAX_RECORD_PAYLOAD_SIZE))
 }
 
-fn validate_wss_url(url: &str) -> ApiResult<()> {
+fn validate_wss_url(url: &str) -> ApiResult<Url> {
     let parsed = Url::parse(url).map_err(|_| ApiError::OuterProtocolFailure(CarrierKind::Wss))?;
     if parsed.scheme() != "wss" || parsed.host_str().is_none() {
         return Err(ApiError::OuterProtocolFailure(CarrierKind::Wss));
     }
-    Ok(())
+    Ok(parsed)
 }
 
-fn validate_selected_subprotocol(
-    response: &tokio_tungstenite::tungstenite::handshake::client::Response,
-    expected: &str,
-) -> ApiResult<()> {
+async fn connect_wss_stream(
+    config: &TransportClientConfig,
+    target_url: &Url,
+    request: Request,
+    budget: std::time::Duration,
+) -> ApiResult<(WssStream, Response)> {
+    match config.wss_http_proxy() {
+        Some(proxy) => connect_wss_via_proxy(config, proxy, target_url, request, budget).await,
+        None => connect_wss_direct(config, request, budget).await,
+    }
+}
+
+async fn connect_wss_direct(
+    config: &TransportClientConfig,
+    request: Request,
+    budget: std::time::Duration,
+) -> ApiResult<(WssStream, Response)> {
+    let connector = Connector::Rustls(config.wss_client_config()?);
+    timeout(
+        budget,
+        Box::pin(connect_async_tls_with_config(
+            request,
+            Some(websocket_config()),
+            false,
+            Some(connector),
+        )),
+    )
+    .await
+    .map_err(|_| ApiError::OuterPathFailure(CarrierKind::Wss))?
+    .map_err(|error| map_wss_connect_error(&error))
+}
+
+async fn connect_wss_via_proxy(
+    config: &TransportClientConfig,
+    proxy: &HttpProxyConfig,
+    target_url: &Url,
+    request: Request,
+    budget: std::time::Duration,
+) -> ApiResult<(WssStream, Response)> {
+    let deadline = Instant::now() + budget;
+    let tunnel = timeout(
+        remaining_budget(deadline),
+        connect_proxy_tunnel(proxy, target_url),
+    )
+    .await
+    .map_err(|_| ApiError::OuterProxyFailure(CarrierKind::Wss))??;
+    let connector = Connector::Rustls(config.wss_client_config()?);
+    timeout(
+        remaining_budget(deadline),
+        Box::pin(client_async_tls_with_config(
+            request,
+            tunnel,
+            Some(websocket_config()),
+            Some(connector),
+        )),
+    )
+    .await
+    .map_err(|_| ApiError::OuterPathFailure(CarrierKind::Wss))?
+    .map_err(|error| map_wss_connect_error(&error))
+}
+
+fn remaining_budget(deadline: Instant) -> std::time::Duration {
+    deadline.saturating_duration_since(Instant::now())
+}
+
+async fn connect_proxy_tunnel(proxy: &HttpProxyConfig, target_url: &Url) -> ApiResult<TcpStream> {
+    let parsed_proxy = parse_http_proxy(proxy)?;
+    let target_authority = authority_for_url(target_url, target_url.port_or_known_default())?;
+    let mut stream = TcpStream::connect((parsed_proxy.host.as_str(), parsed_proxy.port))
+        .await
+        .map_err(|_| ApiError::OuterProxyFailure(CarrierKind::Wss))?;
+    let request =
+        format!("CONNECT {target_authority} HTTP/1.1\r\nHost: {target_authority}\r\n\r\n");
+    stream
+        .write_all(request.as_bytes())
+        .await
+        .map_err(|_| ApiError::OuterProxyFailure(CarrierKind::Wss))?;
+    read_proxy_connect_response(&mut stream).await?;
+    Ok(stream)
+}
+
+struct ParsedHttpProxy {
+    host: String,
+    port: u16,
+}
+
+fn parse_http_proxy(proxy: &HttpProxyConfig) -> ApiResult<ParsedHttpProxy> {
+    let url = Url::parse(&proxy.url).map_err(|_| ApiError::OuterProxyFailure(CarrierKind::Wss))?;
+    if url.scheme() != "http"
+        || url.username() != ""
+        || url.password().is_some()
+        || !matches!(url.path(), "" | "/")
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(ApiError::OuterProxyFailure(CarrierKind::Wss));
+    }
+    let host = host_for_connect(&url)?;
+    let port = url
+        .port()
+        .ok_or(ApiError::OuterProxyFailure(CarrierKind::Wss))?;
+    Ok(ParsedHttpProxy { host, port })
+}
+
+fn host_for_connect(url: &Url) -> ApiResult<String> {
+    match url
+        .host()
+        .ok_or(ApiError::OuterProxyFailure(CarrierKind::Wss))?
+    {
+        Host::Domain(domain) => Ok(domain.to_owned()),
+        Host::Ipv4(address) => Ok(address.to_string()),
+        Host::Ipv6(address) => Ok(address.to_string()),
+    }
+}
+
+fn authority_for_url(url: &Url, port: Option<u16>) -> ApiResult<String> {
+    let port = port.ok_or(ApiError::OuterProxyFailure(CarrierKind::Wss))?;
+    let host = match url
+        .host()
+        .ok_or(ApiError::OuterProxyFailure(CarrierKind::Wss))?
+    {
+        Host::Domain(domain) => domain.to_owned(),
+        Host::Ipv4(address) => address.to_string(),
+        Host::Ipv6(address) => format!("[{address}]"),
+    };
+    Ok(format!("{host}:{port}"))
+}
+
+async fn read_proxy_connect_response(stream: &mut TcpStream) -> ApiResult<()> {
+    let mut response = Vec::with_capacity(128);
+    let mut byte = [0_u8; 1];
+    while !response.ends_with(b"\r\n\r\n") {
+        if response.len() >= MAX_PROXY_CONNECT_RESPONSE_BYTES {
+            return Err(ApiError::OuterProxyFailure(CarrierKind::Wss));
+        }
+        let read = stream
+            .read(&mut byte)
+            .await
+            .map_err(|_| ApiError::OuterProxyFailure(CarrierKind::Wss))?;
+        if read == 0 {
+            return Err(ApiError::OuterProxyFailure(CarrierKind::Wss));
+        }
+        response.push(byte[0]);
+    }
+    validate_proxy_connect_response(&response)
+}
+
+fn validate_proxy_connect_response(response: &[u8]) -> ApiResult<()> {
+    let response =
+        std::str::from_utf8(response).map_err(|_| ApiError::OuterProxyFailure(CarrierKind::Wss))?;
+    let status_line = response
+        .split("\r\n")
+        .next()
+        .ok_or(ApiError::OuterProxyFailure(CarrierKind::Wss))?;
+    let mut parts = status_line.split_whitespace();
+    let version = parts
+        .next()
+        .ok_or(ApiError::OuterProxyFailure(CarrierKind::Wss))?;
+    let status = parts
+        .next()
+        .ok_or(ApiError::OuterProxyFailure(CarrierKind::Wss))?;
+    if matches!(version, "HTTP/1.0" | "HTTP/1.1") && status == "200" {
+        Ok(())
+    } else {
+        Err(ApiError::OuterProxyFailure(CarrierKind::Wss))
+    }
+}
+
+fn validate_selected_subprotocol(response: &Response, expected: &str) -> ApiResult<()> {
     let Some(selected) = response.headers().get(SEC_WEBSOCKET_PROTOCOL) else {
         return Err(ApiError::OuterProtocolFailure(CarrierKind::Wss));
     };
@@ -154,7 +317,7 @@ fn map_wss_connect_error(error: &tokio_tungstenite::tungstenite::Error) -> ApiEr
 }
 
 struct WssFramedDuplex {
-    stream: WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>,
+    stream: WssStream,
     read_timeout: std::time::Duration,
     write_timeout: std::time::Duration,
 }
@@ -199,9 +362,7 @@ impl FramedDuplex for WssFramedDuplex {
     }
 }
 
-async fn receive_wss_record(
-    stream: &mut WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>,
-) -> ApiResult<Option<Vec<u8>>> {
+async fn receive_wss_record(stream: &mut WssStream) -> ApiResult<Option<Vec<u8>>> {
     loop {
         let Some(message) = stream.next().await else {
             return Ok(None);
@@ -237,7 +398,9 @@ fn is_tls_io_error(error: &std::io::Error) -> bool {
 mod tests {
     use tokio_tungstenite::tungstenite::Error;
 
-    use super::{map_wss_runtime_error, websocket_config};
+    use crate::HttpProxyConfig;
+
+    use super::{map_wss_runtime_error, parse_http_proxy, websocket_config};
 
     #[test]
     fn connection_closed_runtime_errors_map_to_transport_closed() {
@@ -267,5 +430,24 @@ mod tests {
             config.max_frame_size,
             Some(secure_tunnel_core::MAX_RECORD_PAYLOAD_SIZE)
         );
+    }
+
+    #[test]
+    fn http_proxy_config_accepts_only_plain_explicit_connect_url() {
+        assert!(parse_http_proxy(&HttpProxyConfig::new("http://127.0.0.1:8080")).is_ok());
+        for url in [
+            "https://127.0.0.1:8080",
+            "http://127.0.0.1",
+            "http://user@127.0.0.1:8080",
+            "http://127.0.0.1:8080/proxy",
+            "http://127.0.0.1:8080?x=1",
+            "http://127.0.0.1:8080#frag",
+            "socks5://127.0.0.1:1080",
+        ] {
+            assert!(
+                parse_http_proxy(&HttpProxyConfig::new(url)).is_err(),
+                "proxy URL should be rejected: {url}"
+            );
+        }
     }
 }

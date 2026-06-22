@@ -84,8 +84,13 @@ dictionary ClientConfig {
   u64 record_read_timeout_ms;
   u64 record_write_timeout_ms;
   sequence<bytes> outer_root_certificates_der;
+  HttpProxyConfig? wss_http_proxy;
   sequence<DescriptorTrustAnchor> descriptor_trust_anchors;
   sequence<bytes> pinned_service_static_public_keys;
+};
+
+dictionary HttpProxyConfig {
+  string url;
 };
 
 dictionary DescriptorTrustAnchor {

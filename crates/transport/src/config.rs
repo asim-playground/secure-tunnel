@@ -23,9 +23,17 @@ use secure_tunnel_core::{
 #[derive(Debug, Clone)]
 pub struct TransportClientConfig {
     root_certificates_der: Option<Vec<Vec<u8>>>,
+    wss_http_proxy: Option<HttpProxyConfig>,
     descriptor_trust_anchors: Vec<TrustAnchor>,
     pinned_service_static_public_keys: Vec<NoisePublicKey>,
     timeouts: TransportClientTimeouts,
+}
+
+/// Explicit HTTP proxy used by the `WSS` carrier.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HttpProxyConfig {
+    /// Plain HTTP proxy URL in the v1 `http://host:port` form.
+    pub url: String,
 }
 
 /// Timeout budgets enforced by production carrier adapters.
@@ -47,6 +55,7 @@ impl TransportClientConfig {
     pub fn platform_verifier() -> Self {
         Self {
             root_certificates_der: None,
+            wss_http_proxy: None,
             descriptor_trust_anchors: Vec::new(),
             pinned_service_static_public_keys: Vec::new(),
             timeouts: TransportClientTimeouts::default(),
@@ -64,10 +73,18 @@ impl TransportClientConfig {
     pub fn with_root_certificate_der(root_certificates_der: Vec<Vec<u8>>) -> Self {
         Self {
             root_certificates_der: Some(root_certificates_der),
+            wss_http_proxy: None,
             descriptor_trust_anchors: Vec::new(),
             pinned_service_static_public_keys: Vec::new(),
             timeouts: TransportClientTimeouts::default(),
         }
+    }
+
+    /// Sets an explicit plain HTTP `CONNECT` proxy for `WSS` only.
+    #[must_use]
+    pub fn with_wss_http_proxy(mut self, proxy: HttpProxyConfig) -> Self {
+        self.wss_http_proxy = Some(proxy);
+        self
     }
 
     /// Sets pinned descriptor roots for service descriptor authorization.
@@ -93,6 +110,10 @@ impl TransportClientConfig {
 
     pub(crate) const fn timeouts(&self) -> TransportClientTimeouts {
         self.timeouts
+    }
+
+    pub(crate) const fn wss_http_proxy(&self) -> Option<&HttpProxyConfig> {
+        self.wss_http_proxy.as_ref()
     }
 
     pub(crate) fn descriptor_trust_anchors(&self) -> Vec<TrustAnchor> {
@@ -127,10 +148,19 @@ impl Default for TransportClientConfig {
     fn default() -> Self {
         Self {
             root_certificates_der: None,
+            wss_http_proxy: None,
             descriptor_trust_anchors: example_descriptor_trust_anchors(),
             pinned_service_static_public_keys: vec![obfuscated_service_static_public_key()],
             timeouts: TransportClientTimeouts::default(),
         }
+    }
+}
+
+impl HttpProxyConfig {
+    /// Creates an explicit HTTP proxy configuration.
+    #[must_use]
+    pub fn new(url: impl Into<String>) -> Self {
+        Self { url: url.into() }
     }
 }
 

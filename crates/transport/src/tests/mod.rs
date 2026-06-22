@@ -6,6 +6,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 mod fixture;
+mod proxy;
+mod proxy_cases;
 mod server;
 
 use secure_tunnel_core::{
@@ -352,11 +354,16 @@ fn transport_ports(
     certificates: impl IntoIterator<Item = Vec<u8>>,
     fixture: &ServiceFixture,
 ) -> ProductionTransportPorts {
-    ProductionTransportPorts::new(
-        TransportClientConfig::with_root_certificate_der(certificates.into_iter().collect())
-            .with_descriptor_trust_anchors(example_descriptor_trust_anchors())
-            .with_pinned_service_static_public_keys(vec![fixture.server_public_key()]),
-    )
+    ProductionTransportPorts::new(transport_config(certificates, fixture))
+}
+
+fn transport_config(
+    certificates: impl IntoIterator<Item = Vec<u8>>,
+    fixture: &ServiceFixture,
+) -> TransportClientConfig {
+    TransportClientConfig::with_root_certificate_der(certificates.into_iter().collect())
+        .with_descriptor_trust_anchors(example_descriptor_trust_anchors())
+        .with_pinned_service_static_public_keys(vec![fixture.server_public_key()])
 }
 
 fn cached_quic_bad() -> TransportCacheSnapshot {
@@ -375,4 +382,12 @@ const fn short_timeouts() -> crate::TransportClientTimeouts {
         record_read: std::time::Duration::from_millis(100),
         record_write: std::time::Duration::from_millis(100),
     }
+}
+
+fn wss_target(port: u16) -> TransportTarget {
+    TransportTarget::Wss(secure_tunnel_core::WssTarget {
+        url: format!("wss://127.0.0.1:{port}/tunnel"),
+        subprotocol: WSS_SUBPROTOCOL_V1.to_owned(),
+        authority_override: None,
+    })
 }

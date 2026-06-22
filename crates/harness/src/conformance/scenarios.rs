@@ -50,6 +50,7 @@ pub async fn run_conformance_scenario(
         ConformanceScenario::CustomCaWrongRootTlsFailure => {
             custom_ca_wrong_root_tls_failure().await
         }
+        ConformanceScenario::ProxiedWss => super::managed_network::proxied_wss().await,
     }
 }
 

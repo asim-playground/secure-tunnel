@@ -63,9 +63,16 @@ type ClientConfig struct {
 	TransportPolicy TransportPolicyConfig
 	// OuterRootCertificatesDER adds outer TLS roots to platform trust.
 	// Android extra-root support is currently unavailable and fails outer TLS when non-empty.
-	OuterRootCertificatesDER      [][]byte
+	OuterRootCertificatesDER [][]byte
+	// WSSHTTPProxy routes only the WSS carrier through an explicit HTTP CONNECT proxy.
+	WSSHTTPProxy                  *HttpProxyConfig
 	DescriptorTrustAnchors        []DescriptorTrustAnchor
 	PinnedServiceStaticPublicKeys [][]byte
+}
+
+// HttpProxyConfig is an explicit plain HTTP proxy for WSS.
+type HttpProxyConfig struct {
+	URL string `json:"url"`
 }
 
 // ConnectOptions supplies one connect attempt.

@@ -18,6 +18,8 @@ pub(super) struct GoClientConfigJson {
     #[serde(default)]
     outer_root_certificates_der_b64: Vec<String>,
     #[serde(default)]
+    wss_http_proxy: Option<secure_tunnel_sdk::HttpProxyConfig>,
+    #[serde(default)]
     descriptor_trust_anchors: Vec<secure_tunnel_core::TrustAnchor>,
     #[serde(default)]
     pinned_service_static_public_keys_b64: Vec<String>,
@@ -77,6 +79,7 @@ impl GoClientConfigJson {
                 .iter()
                 .map(|value| STANDARD.encode(value))
                 .collect(),
+            wss_http_proxy: config.wss_http_proxy,
             descriptor_trust_anchors: config.descriptor_trust_anchors,
             pinned_service_static_public_keys_b64: config
                 .pinned_service_static_public_keys
@@ -97,6 +100,7 @@ impl GoClientConfigJson {
             } else {
                 Some(outer_roots)
             },
+            wss_http_proxy: self.wss_http_proxy,
             descriptor_trust_anchors: if self.descriptor_trust_anchors.is_empty() {
                 defaults.descriptor_trust_anchors
             } else {

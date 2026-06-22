@@ -42,6 +42,7 @@ async fn conformance_suite_runs_current_scenarios() {
             ConformanceScenario::CustomCaQuicRejectedWssFallback,
             ConformanceScenario::CustomCaInnerTrustFailure,
             ConformanceScenario::CustomCaWrongRootTlsFailure,
+            ConformanceScenario::ProxiedWss,
         ],
     );
     let pending: Vec<&str> = report
@@ -49,10 +50,7 @@ async fn conformance_suite_runs_current_scenarios() {
         .iter()
         .map(|row| row.scenario.as_str())
         .collect();
-    assert_eq!(
-        pending.as_slice(),
-        ["proxied-wss", "abrupt-close", "truncated-close",],
-    );
+    assert_eq!(pending.as_slice(), ["abrupt-close", "truncated-close",],);
     let json = serde_json::to_string(&report).expect("report should serialize");
     assert_sanitized_json(&json);
 }

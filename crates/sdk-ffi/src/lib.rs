@@ -26,8 +26,8 @@ pub use error::SecureTunnelError;
 pub use types::{
     AccountAuthMode, AccountAuthReport, AccountAuthRequest, AccountFreshness, CacheDisposition,
     CandidateSource, Carrier, ClientConfig, CloseClassification, ConnectOptions, ConnectReport,
-    DescriptorTrustAnchor, DeviceState, FallbackReason, SessionState, TransportAttemptOutcome,
-    TransportAttemptReport, TransportCacheSnapshot,
+    DescriptorTrustAnchor, DeviceState, FallbackReason, HttpProxyConfig, SessionState,
+    TransportAttemptOutcome, TransportAttemptReport, TransportCacheSnapshot,
 };
 pub use types_more::{CloseReport, DeviceAuthChallenge, DeviceAuthReport, SecureChannelArtifacts};
 
@@ -73,6 +73,7 @@ pub fn default_client_config() -> ClientConfig {
         record_read_timeout_ms: policy.record_read_timeout_ms,
         record_write_timeout_ms: policy.record_write_timeout_ms,
         outer_root_certificates_der: Vec::new(),
+        wss_http_proxy: None,
         descriptor_trust_anchors: secure_tunnel_core::example_descriptor_trust_anchors()
             .into_iter()
             .map(|anchor| DescriptorTrustAnchor {
@@ -101,6 +102,7 @@ mod tests {
         assert_eq!(config.quic_reprobe_delay_seconds, 300);
         assert_eq!(config.quic_connect_timeout_ms, 2_000);
         assert_eq!(config.secure_ready_timeout_ms, 3_000);
+        assert_eq!(config.wss_http_proxy, None);
         assert_eq!(config.descriptor_trust_anchors.len(), 1);
         assert_eq!(config.descriptor_trust_anchors[0].algorithm, "ed25519");
         assert_eq!(config.pinned_service_static_public_keys.len(), 1);

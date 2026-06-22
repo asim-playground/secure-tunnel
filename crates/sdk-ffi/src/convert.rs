@@ -40,6 +40,9 @@ pub fn sdk_config(config: ClientConfig) -> FfiResult<secure_tunnel_sdk::ClientCo
             record_write_timeout_ms: config.record_write_timeout_ms,
         },
         outer_root_certificates_der: outer_roots,
+        wss_http_proxy: config
+            .wss_http_proxy
+            .map(|proxy| secure_tunnel_sdk::HttpProxyConfig { url: proxy.url }),
         descriptor_trust_anchors: config
             .descriptor_trust_anchors
             .into_iter()

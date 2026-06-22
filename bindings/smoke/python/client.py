@@ -40,6 +40,7 @@ def main() -> int:
         outer_root_certificates_der=_decode_many(
             fixture["outer_root_certificates_der_b64"],
         ),
+        wss_http_proxy=None,
         descriptor_trust_anchors=defaults.descriptor_trust_anchors,
         pinned_service_static_public_keys=_decode_many(
             fixture["pinned_service_static_public_keys_b64"],

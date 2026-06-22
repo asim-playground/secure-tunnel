@@ -23,10 +23,10 @@ printf '%s\n' "${json}" | jq -e '
     "custom_ca_wss_success",
     "custom_ca_quic_rejected_wss_fallback",
     "custom_ca_inner_trust_failure",
-    "custom_ca_wrong_root_tls_failure"
+    "custom_ca_wrong_root_tls_failure",
+    "proxied_wss"
   ])
   and ([.pending[].scenario] == [
-    "proxied-wss",
     "abrupt-close",
     "truncated-close"
   ])

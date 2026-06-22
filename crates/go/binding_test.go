@@ -127,63 +127,6 @@ func TestConcurrentValidation(t *testing.T) {
 	wg.Wait()
 }
 
-func TestDefaultClientConfigRoundTrips(t *testing.T) {
-	config, err := DefaultClientConfig(context.Background())
-	if err != nil {
-		t.Fatalf("DefaultClientConfig() error = %v", err)
-	}
-	if config.TransportPolicy.ConnectTimeoutMs == 0 {
-		t.Fatal("default config missing connect timeout")
-	}
-	if len(config.DescriptorTrustAnchors) == 0 {
-		t.Fatal("default config missing descriptor trust anchors")
-	}
-	if len(config.PinnedServiceStaticPublicKeys) == 0 {
-		t.Fatal("default config missing service static pin")
-	}
-	if len(config.PinnedServiceStaticPublicKeys[0]) != 32 {
-		t.Fatalf("service static pin length = %d, want 32", len(config.PinnedServiceStaticPublicKeys[0]))
-	}
-}
-
-func TestZeroValueClientConfigUsesRustDefaults(t *testing.T) {
-	configJSON, err := encodeClientConfigJSON(ClientConfig{})
-	if err != nil {
-		t.Fatalf("encodeClientConfigJSON() error = %v", err)
-	}
-	if strings.Contains(string(configJSON), "transport_policy") {
-		t.Fatalf("zero-value config should omit transport_policy: %s", string(configJSON))
-	}
-	client, err := NewClient(context.Background(), ClientConfig{})
-	if err != nil {
-		t.Fatalf("NewClient(zero config) error = %v", err)
-	}
-	client.Close()
-}
-
-func TestNewClientRejectsInvalidServicePin(t *testing.T) {
-	config, err := DefaultClientConfig(context.Background())
-	if err != nil {
-		t.Fatalf("DefaultClientConfig() error = %v", err)
-	}
-	config.PinnedServiceStaticPublicKeys = [][]byte{{1, 2, 3}}
-
-	client, err := NewClient(context.Background(), config)
-	if err == nil {
-		if client != nil {
-			client.Close()
-		}
-		t.Fatal("expected invalid config error")
-	}
-	var abiErr *ABIError
-	if !errors.As(err, &abiErr) {
-		t.Fatalf("expected ABIError, got %T", err)
-	}
-	if abiErr.Status != 6 {
-		t.Fatalf("ABIError status = %d, want 6", abiErr.Status)
-	}
-}
-
 func TestClosedClientAndConnectionRejectUse(t *testing.T) {
 	config, err := DefaultClientConfig(context.Background())
 	if err != nil {

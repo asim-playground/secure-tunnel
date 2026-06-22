@@ -31,7 +31,9 @@ pub use auth::{
     DeviceAuthReport, DeviceEnrollmentChallenge, DeviceEnrollmentReport, DeviceState,
 };
 pub use cancellation::CancellationHandle;
-pub use client::{ClientConfig, ConnectOptions, ConnectOutcome, SecureTunnelClient};
+pub use client::{
+    ClientConfig, ConnectOptions, ConnectOutcome, HttpProxyConfig, SecureTunnelClient,
+};
 pub use descriptor::{BootstrapDescriptor, TransportPolicyConfig};
 pub use error::{ConnectError, ConnectResult, SdkError, SdkErrorKind, SdkResult};
 pub use observability::{

@@ -139,10 +139,19 @@ pub struct ClientConfig {
     /// Android extra-root support is currently unavailable in the verifier
     /// dependency and fails outer carrier TLS when non-empty.
     pub outer_root_certificates_der: Vec<Vec<u8>>,
+    /// Explicit plain HTTP proxy for the outer `WSS` carrier only.
+    pub wss_http_proxy: Option<HttpProxyConfig>,
     /// Pinned descriptor roots that may authorize service descriptors.
     pub descriptor_trust_anchors: Vec<DescriptorTrustAnchor>,
     /// Accepted service static public keys.
     pub pinned_service_static_public_keys: Vec<Vec<u8>>,
+}
+
+/// Explicit HTTP proxy configuration used by generated clients.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HttpProxyConfig {
+    /// Plain HTTP proxy URL in the v1 `http://host:port` form.
+    pub url: String,
 }
 
 /// Root key that authorizes descriptors for generated clients.

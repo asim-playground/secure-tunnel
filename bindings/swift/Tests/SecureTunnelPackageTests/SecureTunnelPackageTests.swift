@@ -36,6 +36,7 @@ final class SecureTunnelPackageTests: XCTestCase {
             recordReadTimeoutMs: defaults.recordReadTimeoutMs,
             recordWriteTimeoutMs: defaults.recordWriteTimeoutMs,
             outerRootCertificatesDer: try fixture.outerRootCertificatesDerB64.map(decodeBase64),
+            wssHttpProxy: nil,
             descriptorTrustAnchors: defaults.descriptorTrustAnchors,
             pinnedServiceStaticPublicKeys: try fixture.pinnedServiceStaticPublicKeysB64
                 .map(decodeBase64)

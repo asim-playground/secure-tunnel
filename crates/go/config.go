@@ -15,6 +15,7 @@ import (
 type clientConfigJSON struct {
 	TransportPolicy                  *TransportPolicyConfig  `json:"transport_policy,omitempty"`
 	OuterRootCertificatesDERB64      []string                `json:"outer_root_certificates_der_b64,omitempty"`
+	WSSHTTPProxy                     *HttpProxyConfig        `json:"wss_http_proxy,omitempty"`
 	DescriptorTrustAnchors           []DescriptorTrustAnchor `json:"descriptor_trust_anchors,omitempty"`
 	PinnedServiceStaticPublicKeysB64 []string                `json:"pinned_service_static_public_keys_b64,omitempty"`
 }
@@ -27,6 +28,7 @@ func encodeClientConfigJSON(config ClientConfig) ([]byte, error) {
 	value := clientConfigJSON{
 		TransportPolicy:                  transportPolicy,
 		OuterRootCertificatesDERB64:      encodeMany(config.OuterRootCertificatesDER),
+		WSSHTTPProxy:                     config.WSSHTTPProxy,
 		DescriptorTrustAnchors:           config.DescriptorTrustAnchors,
 		PinnedServiceStaticPublicKeysB64: encodeMany(config.PinnedServiceStaticPublicKeys),
 	}
@@ -53,6 +55,7 @@ func decodeClientConfigJSON(data []byte) (ClientConfig, error) {
 	return ClientConfig{
 		TransportPolicy:               transportPolicy,
 		OuterRootCertificatesDER:      outerRoots,
+		WSSHTTPProxy:                  value.WSSHTTPProxy,
 		DescriptorTrustAnchors:        value.DescriptorTrustAnchors,
 		PinnedServiceStaticPublicKeys: servicePins,
 	}, nil

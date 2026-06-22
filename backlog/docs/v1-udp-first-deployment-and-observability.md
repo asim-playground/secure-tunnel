@@ -89,8 +89,11 @@ The descriptor must explicitly carry any carrier-local host, authority, SNI, or
 URL mapping that differs from `service_authority`. Private outer-TLS roots are
 client configuration that augments platform trust where the platform verifier
 supports it; Android support may require a later verifier-specific path.
-Managed-network proxying is also client configuration. Neither extension may
-weaken inner trust validation.
+Managed-network proxying is also client configuration. V1 accepts only an
+explicit plain HTTP proxy URL in `http://host:port` form for `WSS` HTTP
+`CONNECT`; it does not discover platform or environment proxies, does not
+support proxy credentials, PAC, HTTPS proxies, SOCKS, or proxy authentication,
+and does not proxy `QUIC`. Neither extension may weaken inner trust validation.
 
 ## Telemetry Requirements
 
@@ -171,8 +174,8 @@ Minimum local or staging validation should cover:
 | outer carrier closes without encrypted close | close classification is `abrupt` or `truncated` |
 
 Managed-network cases such as custom outer-TLS CA trust and explicit HTTP
-proxying are required for enterprise compatibility, but their implementation
-belongs to the follow-up managed-network tasks.
+proxying are required for enterprise compatibility and are covered by the local
+conformance matrix.
 
 ## Rollout Blockers
 

@@ -14,6 +14,7 @@
 mod binding_fixture;
 mod conformance;
 mod fixture;
+mod proxy;
 mod responder;
 mod server;
 

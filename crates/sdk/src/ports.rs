@@ -17,7 +17,7 @@ pub(super) struct ProductionTransportPorts {
 
 impl ProductionTransportPorts {
     pub(super) fn new(config: &crate::ClientConfig) -> Self {
-        let transport_config = config
+        let mut transport_config = config
             .outer_root_certificates_der
             .as_ref()
             .map_or_else(
@@ -46,6 +46,11 @@ impl ProductionTransportPorts {
                     config.transport_policy.record_write_timeout_ms,
                 ),
             });
+        if let Some(proxy) = &config.wss_http_proxy {
+            transport_config = transport_config.with_wss_http_proxy(
+                secure_tunnel_transport::HttpProxyConfig::new(proxy.url.clone()),
+            );
+        }
         Self {
             inner: secure_tunnel_transport::ProductionTransportPorts::new(transport_config),
         }
