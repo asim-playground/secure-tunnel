@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+#MISE description="Run end-to-end smoke through the built Python SDK wheel"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+# shellcheck source=../sdk/smoke-common.sh disable=SC1091
+source mise-tasks/sdk/smoke-common.sh
+
+if [[ "${SECURE_TUNNEL_PYTHON_SKIP_BUILD:-0}" != "1" ]]; then
+  mise run python:build-wheel
+fi
+
+python_bin="$(
+  python - <<'PY'
+import sys
+
+print(sys.executable)
+PY
+)"
+tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/secure-tunnel-python-wheel-smoke.XXXXXX")"
+fixture_json="$(mktemp "${TMPDIR:-/tmp}/secure-tunnel-python-wheel-fixture.XXXXXX.json")"
+trap 'stop_secure_tunnel_fixture; rm -rf "${tmp_dir}"; rm -f "${fixture_json}"' EXIT
+
+uv venv --python "${python_bin}" "${tmp_dir}/venv"
+venv_python="${tmp_dir}/venv/bin/python"
+if [[ ! -x "${venv_python}" ]]; then
+  venv_python="${tmp_dir}/venv/Scripts/python.exe"
+fi
+
+wheel="$(find python/dist -maxdepth 1 -name 'secure_tunnel-*.whl' -print -quit)"
+test -n "${wheel}" || {
+  echo "missing secure_tunnel wheel in python/dist" >&2
+  exit 1
+}
+wheel_path="$(cd "$(dirname "${wheel}")" && pwd -P)/$(basename "${wheel}")"
+uv pip install --python "${venv_python}" "${wheel_path}"
+
+start_secure_tunnel_fixture "${fixture_json}"
+(
+  cd "${tmp_dir}"
+  "${venv_python}" "${MISE_PROJECT_ROOT}/python/tests/session_smoke.py" "${fixture_json}"
+)

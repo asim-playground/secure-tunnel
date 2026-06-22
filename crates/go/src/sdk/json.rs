@@ -51,7 +51,7 @@ pub(super) struct GoConnectErrorJson {
 impl GoConnectErrorJson {
     pub(super) fn from_sdk_error(value: &secure_tunnel_sdk::SdkError) -> Self {
         Self {
-            kind: format!("{:?}", value.kind()),
+            kind: value.kind_str().to_owned(),
             message: value.message(),
             attempts: Vec::new(),
         }
@@ -59,7 +59,7 @@ impl GoConnectErrorJson {
 
     pub(super) fn from_connect_error(value: &secure_tunnel_sdk::ConnectError) -> Self {
         Self {
-            kind: format!("{:?}", value.kind()),
+            kind: value.kind().as_str().to_owned(),
             message: value.message(),
             attempts: value.attempts.clone(),
         }

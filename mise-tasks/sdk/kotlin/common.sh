@@ -37,6 +37,11 @@ kotlin_sdk_library_name() {
   esac
 }
 
+kotlin_sdk_version() {
+  sed -n 's/^version = "\([^"]*\)"/\1/p' \
+    "${MISE_PROJECT_ROOT}/bindings/kotlin/build.gradle.kts" | head -n 1
+}
+
 kotlin_sdk_jna_resource_dir() {
   local os arch
   os="$(uname -s)"

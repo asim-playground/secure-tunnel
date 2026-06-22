@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Run the SDK release dry-run"
+set -euo pipefail
+
+mise run sdk:release:dry-run

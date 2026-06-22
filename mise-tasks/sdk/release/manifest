@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Write SDK release dry-run artifact checksums and manifest"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+python3 scripts/sdk_release.py manifest --packages "${SECURE_TUNNEL_SDK_RELEASE_PACKAGES:-}"

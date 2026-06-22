@@ -96,7 +96,7 @@ pub fn attempt_report(value: &secure_tunnel_sdk::TransportAttemptReport) -> Tran
             (Some(fallback_reason(*reason)), None, None)
         }
         secure_tunnel_sdk::TransportAttemptOutcome::Failed { kind, message } => {
-            (None, Some(format!("{kind:?}")), Some(message.clone()))
+            (None, Some(kind.as_str().to_owned()), Some(message.clone()))
         }
     };
     TransportAttemptReport {

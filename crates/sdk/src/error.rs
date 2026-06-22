@@ -69,6 +69,12 @@ impl SdkError {
         self.kind
     }
 
+    /// Returns the stable foreign-language spelling for [`Self::kind`].
+    #[must_use]
+    pub const fn kind_str(&self) -> &'static str {
+        self.kind.as_str()
+    }
+
     /// Returns the human-readable diagnostic message.
     #[must_use]
     pub fn message(&self) -> String {
@@ -219,3 +225,62 @@ pub type SdkResult<T> = Result<T, SdkError>;
 
 /// Result alias for SDK connect operations.
 pub type ConnectResult<T> = Result<T, ConnectError>;
+
+impl SdkErrorKind {
+    /// Returns the stable machine-readable SDK spelling used by non-Rust APIs.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::InvalidDescriptor => "invalid_descriptor",
+            Self::UnavailableCarrier => "unavailable_carrier",
+            Self::OuterPathFailure => "outer_path_failure",
+            Self::OuterTlsFailure => "outer_tls_failure",
+            Self::OuterProxyFailure => "outer_proxy_failure",
+            Self::OuterProtocolFailure => "outer_protocol_failure",
+            Self::OuterQuicRejected => "outer_quic_rejected",
+            Self::OuterQuicClosedEarly => "outer_quic_closed_early",
+            Self::FallbackExhausted => "fallback_exhausted",
+            Self::InnerNoiseFailure => "inner_noise_failure",
+            Self::InnerTrustFailure => "inner_trust_failure",
+            Self::AuthFailure => "auth_failure",
+            Self::PayloadTooLarge => "payload_too_large",
+            Self::Closed => "closed",
+            Self::Cancelled => "cancelled",
+            Self::Internal => "internal",
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SdkErrorKind;
+
+    #[test]
+    fn sdk_error_kind_strings_are_stable_snake_case() {
+        let cases = [
+            (SdkErrorKind::InvalidDescriptor, "invalid_descriptor"),
+            (SdkErrorKind::UnavailableCarrier, "unavailable_carrier"),
+            (SdkErrorKind::OuterPathFailure, "outer_path_failure"),
+            (SdkErrorKind::OuterTlsFailure, "outer_tls_failure"),
+            (SdkErrorKind::OuterProxyFailure, "outer_proxy_failure"),
+            (SdkErrorKind::OuterProtocolFailure, "outer_protocol_failure"),
+            (SdkErrorKind::OuterQuicRejected, "outer_quic_rejected"),
+            (
+                SdkErrorKind::OuterQuicClosedEarly,
+                "outer_quic_closed_early",
+            ),
+            (SdkErrorKind::FallbackExhausted, "fallback_exhausted"),
+            (SdkErrorKind::InnerNoiseFailure, "inner_noise_failure"),
+            (SdkErrorKind::InnerTrustFailure, "inner_trust_failure"),
+            (SdkErrorKind::AuthFailure, "auth_failure"),
+            (SdkErrorKind::PayloadTooLarge, "payload_too_large"),
+            (SdkErrorKind::Closed, "closed"),
+            (SdkErrorKind::Cancelled, "cancelled"),
+            (SdkErrorKind::Internal, "internal"),
+        ];
+
+        for (kind, expected) in cases {
+            assert_eq!(kind.as_str(), expected);
+        }
+    }
+}

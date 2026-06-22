@@ -119,14 +119,14 @@ mod tests {
     #[test]
     fn error_attempts_and_security_artifacts_remain_accessible() {
         let error = SecureTunnelError::with_attempts(
-            "OuterPathFailure",
+            "outer_path_failure",
             "udp path failed",
             vec![TransportAttemptReport {
                 carrier: Carrier::Quic,
                 source: CandidateSource::PreferredCarrier,
                 outcome: TransportAttemptOutcome::Failed,
                 fallback_reason: None,
-                failure_kind: Some("OuterPathFailure".to_owned()),
+                failure_kind: Some("outer_path_failure".to_owned()),
                 failure_message: Some("udp path failed".to_owned()),
             }],
         );
@@ -141,5 +141,34 @@ mod tests {
         assert_eq!(artifacts.handshake_hash, Some(vec![1, 2, 3]));
         assert_eq!(artifacts.channel_binding, Some(vec![4, 5, 6]));
         assert_eq!(artifacts.service_static_public_key, Some(vec![7; 32]));
+    }
+
+    #[test]
+    fn ffi_errors_expose_stable_snake_case_error_kinds() {
+        let error = normalize_descriptor_json("{".to_owned())
+            .expect_err("invalid descriptor maps to FFI error");
+        assert_eq!(error.kind(), "invalid_descriptor");
+
+        let attempt = crate::convert::attempt_report(&secure_tunnel_sdk::TransportAttemptReport {
+            carrier: secure_tunnel_sdk::Carrier::Quic,
+            source: secure_tunnel_sdk::CandidateSource::PreferredCarrier,
+            outcome: secure_tunnel_sdk::TransportAttemptOutcome::Failed {
+                kind: secure_tunnel_sdk::SdkErrorKind::OuterPathFailure,
+                message: "udp path failed".to_owned(),
+            },
+        });
+        assert_eq!(attempt.failure_kind.as_deref(), Some("outer_path_failure"));
+
+        let error = SecureTunnelError::with_attempts(
+            "outer_path_failure",
+            "udp path failed",
+            vec![attempt],
+        );
+        assert_eq!(error.kind(), "outer_path_failure");
+        let attempts = error.attempts();
+        assert_eq!(
+            attempts[0].failure_kind.as_deref(),
+            Some("outer_path_failure"),
+        );
     }
 }

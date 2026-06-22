@@ -74,7 +74,7 @@ impl<T> IntoFfiResult<T> for secure_tunnel_sdk::ConnectResult<T> {
     fn into_ffi(self) -> FfiResult<T> {
         self.map_err(|error| {
             Arc::new(SecureTunnelError::with_attempts(
-                format!("{:?}", error.kind()),
+                error.kind().as_str(),
                 error.message(),
                 error
                     .attempts
@@ -87,13 +87,13 @@ impl<T> IntoFfiResult<T> for secure_tunnel_sdk::ConnectResult<T> {
 }
 
 pub fn internal_error(message: impl Into<String>) -> Arc<SecureTunnelError> {
-    Arc::new(SecureTunnelError::new("Internal", message))
+    Arc::new(SecureTunnelError::new("internal", message))
 }
 
 pub fn invalid_config(message: impl Into<String>) -> Arc<SecureTunnelError> {
-    Arc::new(SecureTunnelError::new("InvalidConfig", message))
+    Arc::new(SecureTunnelError::new("invalid_config", message))
 }
 
 fn error_from_sdk(error: &secure_tunnel_sdk::SdkError) -> SecureTunnelError {
-    SecureTunnelError::new(format!("{:?}", error.kind()), error.message())
+    SecureTunnelError::new(error.kind_str(), error.message())
 }

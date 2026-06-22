@@ -19,6 +19,9 @@ import (
 )
 
 func TestProtocolConstants(t *testing.T) {
+	if Version != "0.1.0" {
+		t.Fatalf("Version = %q, want 0.1.0", Version)
+	}
 	if got := ProtocolID(); got != "secure-tunnel-v1" {
 		t.Fatalf("ProtocolID() = %q", got)
 	}
@@ -358,6 +361,9 @@ func TestBindingFixtureSmoke(t *testing.T) {
 	if connectErr.Kind == "" || connectErr.Message == "" {
 		t.Fatalf("ConnectError missing kind/message: %#v", connectErr)
 	}
+	if strings.ContainsAny(connectErr.Kind, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
+		t.Fatalf("ConnectError kind must use stable snake_case: %q", connectErr.Kind)
+	}
 	if len(connectErr.Attempts) == 0 {
 		t.Fatal("ConnectError missing attempts")
 	}
@@ -367,6 +373,10 @@ func TestBindingFixtureSmoke(t *testing.T) {
 	if connectErr.Attempts[0].Outcome == TransportAttemptOutcomeFailed &&
 		(connectErr.Attempts[0].FailureKind == nil || connectErr.Attempts[0].FailureMessage == nil) {
 		t.Fatalf("failed attempt missing failure details: %#v", connectErr.Attempts[0])
+	}
+	if connectErr.Attempts[0].FailureKind != nil &&
+		strings.ContainsAny(*connectErr.Attempts[0].FailureKind, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
+		t.Fatalf("attempt failure kind must use stable snake_case: %q", *connectErr.Attempts[0].FailureKind)
 	}
 	artifacts, err := connection.SecurityArtifacts()
 	if err != nil {

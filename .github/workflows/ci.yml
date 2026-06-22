@@ -173,6 +173,65 @@ jobs:
           find "$KACHE_CACHE_DIR" -type s -delete 2>/dev/null || true
           rm -f "$KACHE_CACHE_DIR/daemon.sock" 2>/dev/null || true
 
+  sdk-release:
+    name: SDK Release Dry Run
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: jdx/mise-action@v4
+        with:
+          install: true
+          cache: true
+          env: false
+      - name: Enable kache Rust wrapper
+        id: kache-env
+        shell: bash
+        run: |
+          cache_dir="${RUNNER_TEMP:-$PWD/.cache}/kache"
+          mkdir -p "$cache_dir"
+          echo "KACHE_CACHE_DIR=$cache_dir" >> "$GITHUB_ENV"
+          echo "RUSTC_WRAPPER=kache" >> "$GITHUB_ENV"
+          echo "cache_dir=$cache_dir" >> "$GITHUB_OUTPUT"
+      - name: Cache cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-sdk-release
+      - name: Cache kache compiler outputs
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.kache-env.outputs.cache_dir }}
+          key: ${{ runner.os }}-kache-${{ hashFiles('**/Cargo.lock', 'mise.lock') }}-sdk-release
+          restore-keys: |
+            ${{ runner.os }}-kache-
+      - name: Setup environment
+        run: mise run setup
+      - name: Verify kache setup
+        run: |
+          kache --version
+          kache stats || true
+      - name: Run SDK release dry run
+        shell: bash
+        run: mise run sdk:release:dry-run
+      - name: Quiesce kache cache
+        if: always()
+        shell: bash
+        run: |
+          kache daemon stop || true
+          find "$KACHE_CACHE_DIR" -type s -delete 2>/dev/null || true
+          rm -f "$KACHE_CACHE_DIR/daemon.sock" 2>/dev/null || true
+      - name: Upload SDK release manifest
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sdk-release-${{ runner.os }}
+          path: target/sdk-release/
+
   coverage:
     name: Coverage
     runs-on: ubuntu-latest

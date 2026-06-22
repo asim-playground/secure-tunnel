@@ -16,6 +16,7 @@ fi
 
 consumer_root="$(kotlin_sdk_consumer_root)"
 maven_repo="$(kotlin_sdk_maven_repo)"
+version="$(kotlin_sdk_version)"
 fixture_json="$(mktemp "${TMPDIR:-/tmp}/secure-tunnel-kotlin-package-fixture.XXXXXX.json")"
 fixture_properties="${consumer_root}/fixture.properties"
 trap 'stop_secure_tunnel_fixture; rm -f "${fixture_json}"' EXIT
@@ -50,7 +51,7 @@ kotlin {
 }
 
 dependencies {
-    implementation("io.github.asimihsan:secure-tunnel-kotlin:0.1.0")
+    implementation("io.github.asimihsan:secure-tunnel-kotlin:${version}")
 }
 
 application {

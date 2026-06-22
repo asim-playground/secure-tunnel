@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+#MISE description="Build SDK release artifacts, run package smokes, and write manifest"
+set -euo pipefail
+
+cd "${MISE_PROJECT_ROOT:?}"
+
+mise run sdk:check-bindings
+mise run sdk:release:check-metadata
+
+case "$(uname -s)" in
+  Darwin)
+    packages="swift"
+    mise run sdk:swift
+    ;;
+  Linux)
+    packages="kotlin,python,flutter,go"
+    mise run sdk:kotlin
+    mise run python:check-wheel
+    mise run python:smoke-wheel
+    mise run sdk:flutter
+    mise run sdk:go
+    ;;
+  CYGWIN* | MINGW* | MSYS*)
+    packages=""
+    echo "SDK release dry-run package builds are not yet defined for Windows" >&2
+    exit 1
+    ;;
+  *)
+    echo "unsupported SDK release dry-run platform: $(uname -s)" >&2
+    exit 1
+    ;;
+esac
+
+SECURE_TUNNEL_SDK_RELEASE_PACKAGES="${packages}" mise run sdk:release:manifest

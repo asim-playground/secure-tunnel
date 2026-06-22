@@ -12,8 +12,8 @@ import (
 	"fmt"
 )
 
-// Version of the binding package
-const Version = "1.0.0"
+// Version of the binding package.
+const Version = "0.1.0"
 
 // ABIError represents an error returned by the Secure Tunnel C ABI.
 type ABIError struct {

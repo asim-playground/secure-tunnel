@@ -13,7 +13,7 @@ superseded_by: []
 - Status: `draft`
 - Owner: `Asim Ihsan`
 - Related Plans: `plan-00000001`
-- Related Tasks: `task-00000007, task-00000008, task-00000009, task-00000013, task-00000014, task-00000017, task-00000018, task-00000019, task-00000020, task-00000021, task-00000022, task-00000023, task-00000024, task-00000025, task-00000026, task-00000027, task-00000028, task-00000029, task-00000030, task-00000031, task-00000032`
+- Related Tasks: `task-00000007, task-00000008, task-00000009, task-00000013, task-00000014, task-00000017, task-00000018, task-00000019, task-00000020, task-00000021, task-00000022, task-00000023, task-00000024, task-00000025, task-00000026, task-00000027, task-00000028, task-00000029, task-00000030, task-00000031, task-00000032, task-00000033`
 
 ## Summary
 
@@ -323,12 +323,15 @@ Rust facade and behavior.
 - Candidate Tasks:
     - `task-00000032` `harden go sdk cache and failure reporting`
     - `task-00000027` `add sdk release ci and versioning`
+    - `task-00000033` `stabilize public go module release layout`
 - Exit Criteria:
-    - [ ] CI builds and archives package artifacts with versioned outputs.
-    - [ ] stale generated bindings and stale package metadata fail release
+    - [x] CI builds and archives package artifacts with versioned outputs.
+    - [x] stale generated bindings and stale package metadata fail release
           checks.
-    - [ ] release docs identify which targets are production-grade versus smoke
+    - [x] release docs identify which targets are production-grade versus smoke
           parity.
+    - [ ] Go public module/native library release layout is settled or
+          explicitly left internal-only for the release.
 
 ## Backlog Task Map
 
@@ -354,7 +357,8 @@ Rust facade and behavior.
 | task-`00000028` | `package flutter dart sdk using rust facade` | `Phase 5` | `task-00000018, task-00000021, task-00000022, task-00000024` | `completed` |
 | task-`00000029` | `package go sdk over stable c abi` | `Phase 5` | `task-00000016, task-00000018, task-00000021, task-00000022, task-00000024` | `completed` |
 | task-`00000032` | `harden go sdk cache and failure reporting` | `Phase 6` | `task-00000029` | `completed` |
-| task-`00000027` | `add sdk release ci and versioning` | `Phase 6` | `task-00000022, task-00000024, task-00000025, task-00000026, task-00000028, task-00000029, task-00000032` | `proposed` |
+| task-`00000027` | `add sdk release ci and versioning` | `Phase 6` | `task-00000022, task-00000024, task-00000025, task-00000026, task-00000028, task-00000029, task-00000032` | `completed` |
+| task-`00000033` | `stabilize public go module release layout` | `Phase 6` | `task-00000027, task-00000029, task-00000032` | `proposed` |
 
 ## Validation Strategy
 
@@ -388,8 +392,8 @@ Rust facade and behavior.
     - [x] Swift/iOS is the first production-grade SDK package target.
     - [x] Flutter/Dart and Go package tasks exist and share the same Rust SDK
           facade semantics.
-    - [ ] Native packages build in CI and pass import/session smoke tests.
-    - [ ] No unresolved high/medium independent review findings remain.
+    - [x] Native packages build in CI and pass import/session smoke tests.
+    - [x] No unresolved high/medium independent review findings remain.
 
 ## Risks and Mitigations
 
@@ -420,8 +424,8 @@ Rust facade and behavior.
 
 ## Immediate Next Actions
 
-1. Start `task-00000027`, so release packaging can archive all supported SDK
-   artifacts and fail stale generated/package metadata.
+1. Start `task-00000033`, so native Go moves from an internal source artifact
+   to a release-consumable public module/native library layout.
 2. Keep `task-00000013` and `task-00000014` queued for managed-network support
    before declaring the SDK broadly production-ready.
 
@@ -559,3 +563,4 @@ Rust facade and behavior.
 - `2026-06-21` `Completed task 00000031 after independent review and re-review; final validation included mise run dev, security:test, sdk:check-bindings, cargo-mutants list, and cargo-mutants smoke.`
 - `2026-06-22` `Completed task 00000028 and task 00000029, moved the plan to Phase 6 release work, and added task 00000032 for residual Go SDK cache/error hardening before release CI.`
 - `2026-06-22` `Completed task 00000032 and made task 00000027 the next Phase 6 release action.`
+- `2026-06-22` `Completed task 00000027 with dry-run SDK release CI, version metadata checks, artifact manifests/checksums, stable snake_case SDK error strings, and task 00000033 for public Go module/native library release layout.`
