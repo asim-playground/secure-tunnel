@@ -231,7 +231,7 @@ fn encode_close_message(directive: CloseDirective) -> Vec<u8> {
 }
 
 #[cfg(test)]
-fn decode_close_message(record: &[u8]) -> Option<CloseDirective> {
+const fn decode_close_message(record: &[u8]) -> Option<CloseDirective> {
     if record.len() != 4 || record[0] != CLOSE_MESSAGE_TYPE_V1 {
         return None;
     }

@@ -6,6 +6,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
 #![allow(clippy::missing_const_for_fn)]
+#![expect(
+    clippy::large_const_arrays,
+    reason = "UniFFI 0.31.2 emits one required large metadata const in its generated scaffolding"
+)]
 
 //! `UniFFI` facade for generated Secure Tunnel SDK bindings.
 //!
