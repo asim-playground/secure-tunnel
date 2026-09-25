@@ -8,7 +8,7 @@
   <a href="https://codecov.io/gh/asim-playground/secure-tunnel">
     <img src="https://codecov.io/gh/asim-playground/secure-tunnel/branch/main/graph/badge.svg" alt="Coverage">
   </a>
-  <img src="https://img.shields.io/badge/Rust-1.96.0-blue?style=flat-square" alt="Rust 1.96.0">
+  <img src="https://img.shields.io/badge/Rust-1.98.1-blue?style=flat-square" alt="Rust 1.98.1">
   <a href="https://crates.io/crates/secure-tunnel-core">
     <img src="https://img.shields.io/crates/v/secure-tunnel-core?style=flat-square" alt="Crates.io">
   </a>
